@@ -88,7 +88,7 @@
 							   placeholder="Password" value="admin">
 					</span>
 				<input id="loginBtn" type="image"
-					   src="${req.getContextPath()}/img/login.gif" alt="Login"
+					   src="${req.getContextPath()}/img/login_cn.gif" alt="Login"
 					   class="btn_lgn" style="margin-top:0; margin-left:20px"/>
 			</div>
 

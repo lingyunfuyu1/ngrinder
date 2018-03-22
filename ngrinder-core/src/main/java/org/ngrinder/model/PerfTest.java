@@ -1,4 +1,4 @@
-/* 
+/*
  * Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
  *  You may obtain a copy of the License at
@@ -9,7 +9,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License. 
+ * limitations under the License.
  */
 package org.ngrinder.model;
 
@@ -62,50 +62,117 @@ public class PerfTest extends BaseModel<PerfTest> {
 		this.setCreatedUser(createdUser);
 	}
 
+	// 以下是测试基本信息
+
+	/**
+	 * 测试名称
+	 */
 	@Expose
 	@Cloneable
 	@Column(name = "name")
 	private String testName;
 
+	/**
+	 * 标签
+	 */
 	@Expose
 	@Cloneable
 	@Column(name = "tag_string")
 	private String tagString;
 
+	/**
+	 * 描述
+	 */
 	@Expose
 	@Cloneable
 	@Column(length = MAX_LONG_STRING_SIZE)
 	private String description;
 
+	/**
+	 * 状态
+	 * @see org.ngrinder.model.Status
+	 */
 	@Expose
 	@Enumerated(EnumType.STRING)
 	@Column(name = "status")
 	private Status status;
 
-	@Expose
-	@Cloneable
-	/** ignoreSampleCount value, default to 0. */
-	@Column(name = "ignore_sample_count")
-	private Integer ignoreSampleCount;
-
+	/**
+	 * 计划时间，预约执行功能会存这个值
+	 */
 	@Expose
 	/** the scheduled time of this test. */
 	@Column(name = "scheduled_time")
 	@Index(name = "scheduled_time_index")
 	private Date scheduledTime;
 
+	/**
+	 * 开始时间
+	 */
 	@Expose
 	/** the start time of this test. */
 	@Column(name = "start_time")
 	private Date startTime;
 
+	/**
+	 * 结束时间
+	 */
 	@Expose
 	/** the finish time of this test. */
 	@Column(name = "finish_time")
 	private Date finishTime;
 
+	// 以下是【测试配置】信息
+
 	/**
-	 * the target host to test.
+	 * agent个数
+	 */
+	@Expose
+	@Cloneable
+	@Column(name = "agent_count")
+	private Integer agentCount;
+
+	/**
+	 * 每个agent的虚拟用户数，注意，总的虚拟用户数 = vuserPerAgent * agentCount
+	 */
+	@Expose
+	@Cloneable
+	@Column(name = "vuser_per_agent")
+	private Integer vuserPerAgent;
+
+	/**
+	 * 进程
+	 */
+	@Expose
+	@Cloneable
+	@Column(name = "processes")
+	private Integer processes;
+
+	/**
+	 * 线程
+	 */
+	@Expose
+	@Cloneable
+	@Column(name = "threads")
+	private Integer threads;
+
+	/**
+	 * 脚本名称
+	 */
+	@Expose
+	@Cloneable
+	@Column(name = "script_name")
+	private String scriptName;
+
+	/**
+	 * 脚本修订版本号
+	 */
+	@Expose
+	@Column(name = "script_revision")
+	private Long scriptRevision;
+
+	/**
+	 * 被测的目标主机
 	 */
 	@Expose
 	@Cloneable
@@ -113,17 +180,64 @@ public class PerfTest extends BaseModel<PerfTest> {
 	private String targetHosts;
 
 	/**
-	 * The send mail code.
+	 * The threshold code, R for run count（指定测试次数）; D for duration（指定测试时长）.
 	 */
 	@Expose
 	@Cloneable
-	@Column(name = "send_mail", columnDefinition = "char(1)")
-	@Type(type = "true_false")
-	private Boolean sendMail;
-
+	@Column(name = "threshold")
+	private String threshold;
 
 	/**
-	 * Use rampUp or not.
+	 * 测试时长，单位秒
+	 */
+	@Expose
+	@Cloneable
+	@Column(name = "duration")
+	private Long duration;
+
+	/**
+	 * 测试次数
+	 */
+	@Expose
+	@Cloneable
+	@Column(name = "run_count")
+	private Integer runCount;
+
+	/**
+	 * 采样间隔时长
+	 */
+	@Expose
+	@Cloneable
+	@Column(name = "sampling_interval")
+	private Integer samplingInterval;
+
+	/**
+	 * 忽略取样数量（测试配置-显示高级配置）
+	 */
+	@Expose
+	@Cloneable
+	/** ignoreSampleCount value, default to 0. */
+	@Column(name = "ignore_sample_count")
+	private Integer ignoreSampleCount;
+
+	/**
+	 * 是否使用安全文件分发模式
+	 */
+	@Column(name = "safe_distribution")
+	@Cloneable
+	@Type(type = "true_false")
+	private Boolean safeDistribution;
+
+	/**
+	 * 参数
+	 */
+	@Expose
+	@Cloneable
+	@Column(name = "param")
+	private String param;
+
+	/**
+	 * 是否使用Ramp-Up（阶梯上升），即虚拟用户数逐渐增加
 	 */
 	@Expose
 	@Cloneable
@@ -131,16 +245,8 @@ public class PerfTest extends BaseModel<PerfTest> {
 	@Type(type = "true_false")
 	private Boolean useRampUp;
 
-	public RampUp getRampUpType() {
-		return rampUpType;
-	}
-
-	public void setRampUpType(RampUp rampUpType) {
-		this.rampUpType = rampUpType;
-	}
-
 	/**
-	 * Use rampUp or not.
+	 * Ramp-Up类型，进程或线程.
 	 */
 	@Expose
 	@Cloneable
@@ -148,94 +254,81 @@ public class PerfTest extends BaseModel<PerfTest> {
 	@Enumerated(EnumType.STRING)
 	private RampUp rampUpType;
 
-
 	/**
-	 * The threshold code, R for run count; D for duration.
+	 * 阶梯初始数
 	 */
-	@Expose
-	@Cloneable
-	@Column(name = "threshold")
-	private String threshold;
-
-	@Expose
-	@Cloneable
-	@Column(name = "script_name")
-	private String scriptName;
-
-	@Expose
-	@Cloneable
-	@Column(name = "duration")
-	private Long duration;
-
-	@Expose
-	@Cloneable
-	@Column(name = "run_count")
-	private Integer runCount;
-
-	@Expose
-	@Cloneable
-	@Column(name = "agent_count")
-	private Integer agentCount;
-
-	@Expose
-	@Cloneable
-	@Column(name = "vuser_per_agent")
-	private Integer vuserPerAgent;
-
-	@Expose
-	@Cloneable
-	@Column(name = "processes")
-	private Integer processes;
-
 	@Expose
 	@Cloneable
 	@Column(name = "ramp_up_init_count")
 	private Integer rampUpInitCount;
 
-	@Expose
-	@Cloneable
-	@Column(name = "ramp_up_init_sleep_time")
-	private Integer rampUpInitSleepTime;
-
+	/**
+	 * 阶梯增量
+	 */
 	@Expose
 	@Cloneable
 	@Column(name = "ramp_up_step")
 	private Integer rampUpStep;
 
+	/**
+	 * 阶梯初始化等待时间，单位毫秒
+	 */
+	@Expose
+	@Cloneable
+	@Column(name = "ramp_up_init_sleep_time")
+	private Integer rampUpInitSleepTime;
+
+	/**
+	 * 阶梯增量间隔时长，单位毫秒
+	 */
 	@Expose
 	@Cloneable
 	@Column(name = "ramp_up_increment_interval")
 	private Integer rampUpIncrementInterval;
 
-	@Expose
-	@Cloneable
-	@Column(name = "threads")
-	private Integer threads;
+	// 以下是【测试报告】信息
 
-	// followings are test result members
-	@Expose
-	@Column(name = "tests")
-	private Long tests;
-
-	@Expose
-	@Column(name = "errors")
-	private Long errors;
-
-	@Expose
-	@Column(name = "mean_test_time")
-	private Double meanTestTime;
-
-	@Expose
-	@Column(name = "test_time_standard_deviation")
-	private Double testTimeStandardDeviation;
-
+	/**
+	 * TPS
+	 */
 	@Expose
 	@Column(name = "tps")
 	private Double tps;
 
+	/**
+	 * 峰值TPS
+	 */
 	@Expose
 	@Column(name = "peak_tps")
 	private Double peakTps;
+
+	/**
+	 * 平均响应时间
+	 */
+	@Expose
+	@Column(name = "mean_test_time")
+	private Double meanTestTime;
+
+	/**
+	 * 执行测试总数
+	 */
+	@Expose
+	@Column(name = "tests")
+	private Long tests;
+
+	/**
+	 * 测试错误个数
+	 */
+	@Expose
+	@Column(name = "errors")
+	private Long errors;
+
+	/**
+	 * 测试时间标准差
+	 */
+	@Expose
+	@Column(name = "test_time_standard_deviation")
+	private Double testTimeStandardDeviation;
 
 	/**
 	 * Console port for this test. This is the identifier for console
@@ -243,76 +336,107 @@ public class PerfTest extends BaseModel<PerfTest> {
 	@Column(name = "port")
 	private Integer port;
 
+	/**
+	 * 测试错误原因，是一个Status
+	 * @see org.ngrinder.model.Status
+	 */
 	@Expose
 	@Column(name = "test_error_cause")
 	@Enumerated(EnumType.STRING)
 	private Status testErrorCause;
 
+	/**
+	 * 文件分发路径
+	 */
 	@Column(name = "distribution_path")
 	/** The path used for file distribution */
 	private String distributionPath;
 
+	/**
+	 * 进程消息
+	 */
 	@Expose
 	@Column(name = "progress_message", length = MAX_STRING_SIZE)
 	private String progressMessage;
 
+	/**
+	 * 最后一次进程消息
+	 */
 	@Column(name = "last_progress_message", length = MAX_STRING_SIZE)
 	private String lastProgressMessage;
 
+	/**
+	 * 测试注释
+	 */
 	@Expose
 	@Column(name = "test_comment", length = MAX_STRING_SIZE)
 	private String testComment;
 
-	@Expose
-	@Column(name = "script_revision")
-	private Long scriptRevision;
-
+	/**
+	 * 是否停止请求
+	 */
 	@Expose
 	@Column(name = "stop_request")
 	@Type(type = "true_false")
 	private Boolean stopRequest;
 
+	/**
+	 * 地区
+	 */
 	@Expose
 	@Cloneable
 	@Column(name = "region")
 	private String region;
 
-	@Column(name = "safe_distribution")
-	@Cloneable
-	@Type(type = "true_false")
-	private Boolean safeDistribution;
-
+	/**
+	 * 日期
+	 */
 	@Transient
 	private String dateString;
 
+	/**
+	 * GrinderProperties配置
+	 */
 	@Transient
 	private GrinderProperties grinderProperties;
 
+	/**
+	 * 标签
+	 */
 	@ManyToMany(fetch = FetchType.LAZY, cascade = {CascadeType.ALL})
 	@JoinTable(name = "PERF_TEST_TAG", /** join column */
-			joinColumns = @JoinColumn(name = "perf_test_id"), /** inverse join column */
-			inverseJoinColumns = @JoinColumn(name = "tag_id"))
+		joinColumns = @JoinColumn(name = "perf_test_id"), /** inverse join column */
+		inverseJoinColumns = @JoinColumn(name = "tag_id"))
 	@Sort(comparator = Tag.class, type = SortType.COMPARATOR)
 	private SortedSet<Tag> tags;
 
+	/**
+	 * 运行中的采样
+	 */
 	@Column(name = "running_sample", length = 9990)
 	private String runningSample;
 
+	/**
+	 * 代理状态
+	 */
 	@Column(name = "agent_stat", length = 9990)
 	private String agentState;
 
+	/**
+	 * 监控状态
+	 */
 	@Column(name = "monitor_stat", length = 2000)
 	private String monitorState;
 
+	/**
+	 * 是否发送邮件，默认为false，保留字段目前未使用？
+	 */
 	@Expose
 	@Cloneable
-	@Column(name = "sampling_interval")
-	private Integer samplingInterval;
+	@Column(name = "send_mail", columnDefinition = "char(1)")
+	@Type(type = "true_false")
+	private Boolean sendMail;
 
-	@Expose
-	@Cloneable
-	@Column(name = "param")
-	private String param;
 
 	@PrePersist
 	@PreUpdate
@@ -535,6 +659,14 @@ public class PerfTest extends BaseModel<PerfTest> {
 
 	public void setProcesses(Integer processes) {
 		this.processes = processes;
+	}
+
+	public RampUp getRampUpType() {
+		return rampUpType;
+	}
+
+	public void setRampUpType(RampUp rampUpType) {
+		this.rampUpType = rampUpType;
 	}
 
 	public Integer getRampUpInitCount() {

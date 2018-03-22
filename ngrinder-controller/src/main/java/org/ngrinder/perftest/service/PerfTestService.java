@@ -9,7 +9,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License. 
+ * limitations under the License.
  */
 package org.ngrinder.perftest.service;
 
@@ -414,7 +414,9 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	 */
 	@Transactional
 	public PerfTest getNextRunnablePerfTestPerfTestCandidate() {
+		// 取到所有READY状态的perfTest
 		List<PerfTest> readyPerfTests = perfTestRepository.findAllByStatusOrderByScheduledTimeAsc(Status.READY);
+		//
 		List<PerfTest> usersFirstPerfTests = filterCurrentlyRunningTestUsersTest(readyPerfTests);
 		return usersFirstPerfTests.isEmpty() ? null : readyPerfTests.get(0);
 	}
@@ -425,6 +427,7 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	 * @return running test list
 	 */
 	public List<PerfTest> getCurrentlyRunningTest() {
+		// status.getCategory() == StatusCategory.PROGRESSING || status.getCategory() == StatusCategory.TESTING
 		return getAll(null, Status.getProcessingOrTestingTestStatus());
 	}
 
@@ -492,7 +495,7 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see org.ngrinder.service.IPerfTestService#getPerfTestFilePath(org .ngrinder.perftest. model.PerfTest)
 	 */
 	@Override
@@ -502,7 +505,7 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see org.ngrinder.service.IPerfTestService#getPerfTestFilePath(org .ngrinder.perftest. model.PerfTest)
 	 */
 	@Override
@@ -641,6 +644,7 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	 * @return File location in which the perftest script and resources are distributed.
 	 */
 	public ScriptHandler prepareDistribution(PerfTest perfTest) {
+		//创建目录，config.getHome()/perftest/x_xxx/perfTestId/dist，示例：/Users/ziling/.ngrinder/perftest/0_999/180/dist
 		File perfTestDistDirectory = getDistributionPath(perfTest);
 		User user = perfTest.getCreatedUser();
 		FileEntry scriptEntry = checkNotNull(
@@ -901,7 +905,7 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see org.ngrinder.service.IPerfTestService#getAllPerfTest()
 	 */
 	@Override
@@ -989,7 +993,7 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see org.ngrinder.service.IPerfTestService#stop(org.ngrinder .model.User, java.lang.Long)
 	 */
 	@Override
@@ -1025,7 +1029,7 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see org.ngrinder.service.IPerfTestService#getAllStopRequested()
 	 */
 	@Override
@@ -1042,7 +1046,7 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see org.ngrinder.service.IPerfTestService#addCommentOn(org.ngrinder .model.User, int, java.lang.String)
 	 */
 	@Override
@@ -1582,7 +1586,7 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see org.ngrinder.service.IPerfTestService#getAll(java.util.Date, java.util.Date)
 	 */
 	@Override
@@ -1592,7 +1596,7 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see org.ngrinder.service.IPerfTestService#getAll(java.util.Date, java.util.Date, java.lang.String)
 	 */
 	@Override

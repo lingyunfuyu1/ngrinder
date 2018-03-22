@@ -541,7 +541,7 @@ public class SingleConsole extends AbstractSingleConsole implements Listener, Sa
 
 	/*
      * (non-Javadoc)
-	 * 
+	 *
 	 * @see net.grinder.ISingleConsole2#getStatisticsIndexMap()
 	 */
 	public StatisticsIndexMap getStatisticsIndexMap() {

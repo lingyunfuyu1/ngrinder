@@ -1,4 +1,4 @@
-/* 
+/*
  * Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
  *  You may obtain a copy of the License at
@@ -9,7 +9,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License. 
+ * limitations under the License.
  */
 package org.ngrinder.perftest.service;
 
@@ -103,6 +103,7 @@ public class PerfTestRunnable implements ControllerConstants {
 			}
 		};
 		scheduledTaskService.addFixedDelayedScheduledTask(startRunnable, PERFTEST_RUN_FREQUENCY_MILLISECONDS);
+
 		this.finishRunnable = new Runnable() {
 			@Override
 			public void run() {
@@ -201,13 +202,19 @@ public class PerfTestRunnable implements ControllerConstants {
 	public void doTest(final PerfTest perfTest) {
 		SingleConsole singleConsole = null;
 		try {
+			// 为perfTest启动控制台
 			singleConsole = startConsole(perfTest);
+			// 准备要分发的文件
 			ScriptHandler prepareDistribution = perfTestService.prepareDistribution(perfTest);
+			// 创建Grinder Properties文件
 			GrinderProperties grinderProperties = perfTestService.getGrinderProperties(perfTest, prepareDistribution);
+			// 为perfTest启动代理
 			startAgentsOn(perfTest, grinderProperties, checkCancellation(singleConsole));
+			// 分发文件到代理端
 			distributeFileOn(perfTest, checkCancellation(singleConsole));
-
+			// 设置报告路径
 			singleConsole.setReportPath(perfTestService.getReportFileDirectory(perfTest));
+			// 运行测试
 			runTestOn(perfTest, grinderProperties, checkCancellation(singleConsole));
 		} catch (SingleConsoleCancellationException ex) {
 			// In case of error, mark the occurs error on perftest.
@@ -243,11 +250,15 @@ public class PerfTestRunnable implements ControllerConstants {
 	 * @return started console
 	 */
 	SingleConsole startConsole(PerfTest perfTest) {
+		// 设置perfTest.status和perfTest.lastProgressMessage
 		perfTestService.markStatusAndProgress(perfTest, START_CONSOLE, "Console is being prepared.");
-		// get available consoles.
+		// 创建ConsoleProperties（控制台属性文件）
 		ConsoleProperties consoleProperty = perfTestService.createConsoleProperties(perfTest);
+		// 根据ConsoleProperties获取一个可用的SingleConsole
 		SingleConsole singleConsole = consoleManager.getAvailableConsole(consoleProperty);
+		// 启动SingleConsole并保持等待，直到收到代理端消息
 		singleConsole.start();
+		// 标记perfTest为已启动
 		perfTestService.markPerfTestConsoleStart(perfTest, singleConsole.getConsolePort());
 		return singleConsole;
 	}
@@ -400,6 +411,11 @@ public class PerfTestRunnable implements ControllerConstants {
 		doFinish(false);
 	}
 
+	/**
+	 * ziling：如果初始化时调用，则直接doFinish()；否则需要使用中的Console不为空，才会执行doFinish()
+	 *
+	 * @param initial 是否初始化时调用
+	 */
 	protected void doFinish(boolean initial) {
 		if (!initial && consoleManager.getConsoleInUse().isEmpty()) {
 			return;
