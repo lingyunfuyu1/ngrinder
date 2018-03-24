@@ -298,6 +298,7 @@ public class SingleConsole extends AbstractSingleConsole implements Listener, Sa
 		properties.setInt(GrinderProperties.CONSOLE_PORT, getConsolePort());
 		getConsoleComponent(ProcessControl.class).startWorkerProcesses(properties);
 		this.properties = properties;
+		// 设置SingleConsole的startTime为当前时间
 		this.startTime = System.currentTimeMillis();
 		return this.startTime;
 	}

@@ -40,6 +40,8 @@ import org.ngrinder.common.constants.GrinderConstants;
 import org.ngrinder.infra.config.Config;
 import org.ngrinder.model.*;
 import org.ngrinder.monitor.controller.model.SystemDataModel;
+import org.ngrinder.perftest.PerfTestConstants;
+import org.ngrinder.perftest.PerfTestEnum;
 import org.ngrinder.perftest.model.PerfTestStatistics;
 import org.ngrinder.perftest.model.ProcessAndThread;
 import org.ngrinder.perftest.repository.PerfTestRepository;
@@ -241,12 +243,14 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	@Transactional
 	public PerfTest save(User user, PerfTest perfTest) {
 		attachFileRevision(user, perfTest);
+		// 生成type，定时任务获取任务模板数据使用该字段
+		attachType(user, perfTest);
 		attachTags(user, perfTest, perfTest.getTagString());
 		return save(perfTest);
 
 	}
 
-	private PerfTest save(PerfTest perfTest) {
+	protected PerfTest save(PerfTest perfTest) {
 		checkNotNull(perfTest);
 		// Merge if necessary
 		if (perfTest.exist()) {
@@ -255,6 +259,7 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 		} else {
 			perfTest.clearMessages();
 		}
+		// 这里saveAndFlush才会生成testId
 		return perfTestRepository.saveAndFlush(perfTest);
 	}
 
@@ -264,6 +269,20 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 			FileEntry scriptEntry = fileEntryService.getOne(user, perfTest.getScriptName());
 			long revision = scriptEntry != null ? scriptEntry.getRevision() : -1;
 			perfTest.setScriptRevision(revision);
+		}
+	}
+
+	/**
+	 * 附加type字段，scheduler用户的前台操作type=1（模板），后台定时任务type=2（后台定时任务），其他用户type=0
+	 *
+	 * @param user          user
+	 * @param perfTest      perfTest
+	 */
+	private void attachType(User user, PerfTest perfTest) {
+		if (PerfTestConstants.SpecialUser.SCHEDULED_USER_ID.equals(user.getUserId())) {
+			perfTest.setType(PerfTestEnum.SCHEDULED_MODEL.getCode());
+		} else {
+			perfTest.setType(PerfTestEnum.DEFAULT.getCode());
 		}
 	}
 
@@ -414,10 +433,11 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	 */
 	@Transactional
 	public PerfTest getNextRunnablePerfTestPerfTestCandidate() {
-		// 取到所有READY状态的perfTest
+		// 取到所有READY状态的perfTest，按计划时间升序排列
 		List<PerfTest> readyPerfTests = perfTestRepository.findAllByStatusOrderByScheduledTimeAsc(Status.READY);
-		//
+		// 过滤掉已经在运行某个测试的User的readyPerfTests，只留下未运行任何测试的User的readyPerfTests
 		List<PerfTest> usersFirstPerfTests = filterCurrentlyRunningTestUsersTest(readyPerfTests);
+		// 如果不为空，取第一个，也就是scheduledTime
 		return usersFirstPerfTests.isEmpty() ? null : readyPerfTests.get(0);
 	}
 
@@ -438,11 +458,14 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	 * @return filtered perf test
 	 */
 	protected List<PerfTest> filterCurrentlyRunningTestUsersTest(List<PerfTest> perfTestLists) {
+		// 获取到当前正在运行的测试
 		List<PerfTest> currentlyRunningTests = getCurrentlyRunningTest();
 		final Set<User> currentlyRunningTestOwners = newHashSet();
 		for (PerfTest each : currentlyRunningTests) {
+			// 将正在运行的测试的用户（创建者）加到一个Set
 			currentlyRunningTestOwners.add(each.getCreatedUser());
 		}
+		// 过滤掉perfTestLists中用户（创建者）属于上面Set中的perfTest
 		CollectionUtils.filter(perfTestLists, new Predicate() {
 			@Override
 			public boolean evaluate(Object object) {
@@ -450,6 +473,7 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 				return !currentlyRunningTestOwners.contains(perfTest.getCreatedUser());
 			}
 		});
+		// 返回没有运行任何测试的用户（创建者）的perfTestLists
 		return perfTestLists;
 	}
 
@@ -647,14 +671,15 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 		//创建目录，config.getHome()/perftest/x_xxx/perfTestId/dist，示例：/Users/ziling/.ngrinder/perftest/0_999/180/dist
 		File perfTestDistDirectory = getDistributionPath(perfTest);
 		User user = perfTest.getCreatedUser();
-		FileEntry scriptEntry = checkNotNull(
-				fileEntryService.getOne(user,
-						checkNotEmpty(perfTest.getScriptName(), "perfTest should have script name"),
-						getSafe(perfTest.getScriptRevision())), "script should exist");
+		FileEntry tmpScriptEntry = fileEntryService.getOne(user,
+			checkNotEmpty(perfTest.getScriptName(), "perfTest should have script name"),
+			getSafe(perfTest.getScriptRevision()));
+		FileEntry scriptEntry = checkNotNull(tmpScriptEntry, "script should exist");
 		// Get all files in the script path
 		ScriptHandler handler = scriptHandlerFactory.getHandler(scriptEntry);
 
 		ProcessingResultPrintStream processingResult = new ProcessingResultPrintStream(new ByteArrayOutputStream());
+		// 拷贝脚本相关文件（整个脚本工程）到/Users/ziling/.ngrinder/perftest/x_xxx/testId/dist目录
 		handler.prepareDist(perfTest.getId(), user, scriptEntry, perfTestDistDirectory, config.getControllerProperties(),
 				processingResult);
 		LOGGER.info("File write is completed in {}", perfTestDistDirectory);
@@ -1605,4 +1630,76 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	}
 
 
+	/**
+	 * Get {@link PerfTest} list for the given user.
+	 *
+	 * @param type search type.
+	 * @return found {@link PerfTest} list
+	 */
+	public List<PerfTest> getAllByType(int type) {
+		return perfTestRepository.findAllByTypeOrderByCreatedTimeDesc(type);
+	}
+
+//	/**
+//	 * 定时任务排期
+//	 */
+//	@Scheduled(cron = "0 0 11/15 * * ?") //{秒} {分} {时} {日期（具体哪天）} {月} {星期}
+//	@Transactional
+//	public void generateScheduledPerfTests() {
+//		List<PerfTest> sourcePerfTests = getAllByType(PerfTestEnum.SCHEDULED_MODEL.getCode());
+//		Set<String> scriptNames = Sets.newHashSet();
+//		int i = 0;
+//		for (PerfTest each : sourcePerfTests) {
+//			// 同一个脚本可能有多个源测试任务作为模板，这里取第一个（sourcePerfTests是根据创建时间倒序排序，所以是取最新一个）
+//			if (scriptNames.contains(each.getScriptName())) {
+//				continue;
+//			}
+//			// 单个测试最长运行时间，设置计划时间需要依赖这个，确保任何时刻只有一个测试在运行
+//			Long maxDuaring = PerfTestConstants.ScheduledTaskParam.MAX_DURATION;
+//			Long duaring = each.getDuration() > maxDuaring ? maxDuaring : each.getDuration();
+//			Date currentTime = new Date();
+//			Calendar calendar = Calendar.getInstance();
+//			// 通过设置计划时间的先后，让多个测试串行
+//			calendar.set(Calendar.MINUTE, calendar.get(Calendar.MINUTE) + 1 + duaring.intValue() / 1000 / 60 * i);
+//			Date scheduledTime = calendar.getTime();
+//			PerfTest perfTest = new PerfTest();
+//			perfTest.setTestName(each.getTestName());
+//			perfTest.setTagString(each.getTagString());
+//			perfTest.setDescription(each.getDescription());
+//			perfTest.setStatus(Status.READY);
+//			perfTest.setScheduledTime(scheduledTime);
+//			perfTest.setAgentCount(each.getAgentCount());
+//			perfTest.setVuserPerAgent(each.getVuserPerAgent());
+//			perfTest.setProcesses(each.getProcesses());
+//			perfTest.setThreads(each.getThreads());
+//			perfTest.setScriptName(each.getScriptName());
+//			perfTest.setScriptRevision(each.getScriptRevision());
+//			perfTest.setTargetHosts(each.getTargetHosts());
+//			perfTest.setThreshold(each.getThreshold());
+//			perfTest.setDuration(duaring);
+//			perfTest.setRunCount(each.getRunCount());
+//			perfTest.setSamplingInterval(each.getSamplingInterval());
+//			perfTest.setIgnoreSampleCount(each.getIgnoreSampleCount());
+//			perfTest.setSafeDistribution(each.getSafeDistribution());
+//			perfTest.setParam(each.getParam());
+//			perfTest.setUseRampUp(each.getUseRampUp());
+//			perfTest.setRampUpType(each.getRampUpType());
+//			perfTest.setRampUpInitCount(each.getRampUpInitCount());
+//			perfTest.setRampUpStep(each.getRampUpStep());
+//			perfTest.setRampUpInitSleepTime(each.getRampUpInitSleepTime());
+//			perfTest.setRampUpIncrementInterval(each.getRampUpIncrementInterval());
+//			perfTest.setType(PerfTestEnum.SCHEDULED_TASK.getCode());
+//			perfTest.setProgressMessage("");
+//			perfTest.setLastProgressMessage("");
+//			// SortedSet<Tag> tags = new TreeSet<>(each.getTags());
+//			perfTest.setTags(new TreeSet<>(each.getTags()));
+//			perfTest.setCreatedDate(currentTime);
+//			perfTest.setCreatedUser(each.getCreatedUser());
+//			perfTest.setLastModifiedDate(currentTime);
+//			perfTest.setLastModifiedUser(each.getLastModifiedUser());
+//			save(perfTest);
+//			scriptNames.add(each.getScriptName());
+//			i = i + 1;
+//		}
+//	}
 }

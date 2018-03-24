@@ -286,6 +286,13 @@ public class PerfTest extends BaseModel<PerfTest> {
 	@Column(name = "ramp_up_increment_interval")
 	private Integer rampUpIncrementInterval;
 
+	/**
+	 * 类型
+	 * @see
+	 */
+	@Expose
+	@Column(name = "type")
+	private Integer type;
 	// 以下是【测试报告】信息
 
 	/**
@@ -938,6 +945,15 @@ public class PerfTest extends BaseModel<PerfTest> {
 	public void setSafeDistribution(Boolean safeDistribution) {
 		this.safeDistribution = safeDistribution;
 	}
+
+	public Integer getType() {
+		return type;
+	}
+
+	public void setType(Integer type) {
+		this.type = type;
+	}
+
 
 	public String getRunningSample() {
 		return runningSample;

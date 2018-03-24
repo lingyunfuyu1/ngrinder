@@ -130,33 +130,36 @@ public class PerfTestRunnable implements ControllerConstants {
 	}
 
 	void doStart() {
+		// 如果存在no_more_test.lock，则无法继续
 		if (config.hasNoMoreTestLock()) {
 			return;
 		}
-		// Block if the count of testing exceed the limit
+		// 如果使用中的Console数量超过了配置的Console数量最大值，则无法继续
 		if (!canExecuteMore()) {
 			// LOG MORE
 			List<PerfTest> currentlyRunningTests = perfTestService.getCurrentlyRunningTest();
 			LOG.debug("Currently running test is {}. No more tests can not run.", currentlyRunningTests.size());
 			return;
 		}
-		// Find out next ready perftest
+		// 取下一个READY状态的perfTest，如果有多个perfTestList(过滤掉正在运行测试的用户的perfTestList)，取scheduledTime最近的一个
 		PerfTest runCandidate = getRunnablePerfTest();
 		if (runCandidate == null) {
 			return;
 		}
 
+		// 是否到了计划时间，如果没到，则无法继续
 		if (!isScheduledNow(runCandidate)) {
 			// this test project is reserved,but it isn't yet going to run test
 			// right now.
 			return;
 		}
 
-
+		// 是否有足够的agent，如果没有，则无法继续
 		if (!hasEnoughFreeAgents(runCandidate)) {
 			return;
 		}
 
+		// 执行测试
 		doTest(runCandidate);
 	}
 
@@ -168,10 +171,19 @@ public class PerfTestRunnable implements ControllerConstants {
 		return consoleManager.getConsoleInUse().size() < perfTestService.getMaximumConcurrentTestCount();
 	}
 
-	private boolean isScheduledNow(PerfTest test) {
+	/**
+	 * 判断是否到了计划时间，精确到分（截断秒）
+	 *
+	 * @param perfTest perftest instance
+	 * @return true if到了计划时间
+	 */
+	private boolean isScheduledNow(PerfTest perfTest) {
+		// 当前时间年月日时分秒
 		Date current = new Date();
+		// perfTest可能没有设置计划时间，未设置则默认取当前时间；精确到分，也就是秒为00
 		Date scheduledDate = DateUtils
-				.truncate((Date) defaultIfNull(test.getScheduledTime(), current), Calendar.MINUTE);
+				.truncate((Date) defaultIfNull(perfTest.getScheduledTime(), current), Calendar.MINUTE);
+		// 计划时间是精确到分的一个时间，而current是精确到秒的一个时间
 		return current.after(scheduledDate);
 	}
 
@@ -179,14 +191,15 @@ public class PerfTestRunnable implements ControllerConstants {
 	/**
 	 * Check the free agent availability for the given {@link PerfTest}.
 	 *
-	 * @param test {@link PerfTest}
+	 * @param perfTest {@link PerfTest}
 	 * @return true if enough agents
 	 */
-	protected boolean hasEnoughFreeAgents(PerfTest test) {
-		int size = agentManager.getAllFreeApprovedAgentsForUser(test.getCreatedUser()).size();
-		if (test.getAgentCount() != null && test.getAgentCount() > size) {
-			perfTestService.markProgress(test, "The test is tried to execute but there is not enough free agents."
-					+ "\n- Current free agent count : " + size + "  / Requested : " + test.getAgentCount() + "\n");
+	protected boolean hasEnoughFreeAgents(PerfTest perfTest) {
+		// 获取当前perftest的用户（创建者）可以使用的agent个数（状态为READY的agent）
+		int size = agentManager.getAllFreeApprovedAgentsForUser(perfTest.getCreatedUser()).size();
+		if (perfTest.getAgentCount() != null && perfTest.getAgentCount() > size) {
+			perfTestService.markProgress(perfTest, "The test is tried to execute but there is not enough free agents."
+					+ "\n- Current free agent count : " + size + "  / Requested : " + perfTest.getAgentCount() + "\n");
 			return false;
 		}
 		return true;
@@ -245,6 +258,11 @@ public class PerfTestRunnable implements ControllerConstants {
 
 	/**
 	 * Start a console for given {@link PerfTest}.
+	 * 1、标记perfTest状态为启动控制台
+	 * 2、创建控制台属性文件ConsoleProperties
+	 * 3、获取一个可用的控制台SingleConsole
+	 * 4、启动控制台
+	 * 5、标记perfTest状态为控制台已启动
 	 *
 	 * @param perfTest perftest
 	 * @return started console
@@ -258,7 +276,7 @@ public class PerfTestRunnable implements ControllerConstants {
 		SingleConsole singleConsole = consoleManager.getAvailableConsole(consoleProperty);
 		// 启动SingleConsole并保持等待，直到收到代理端消息
 		singleConsole.start();
-		// 标记perfTest为已启动
+		// 标记perfTest为控制台已启动
 		perfTestService.markPerfTestConsoleStart(perfTest, singleConsole.getConsolePort());
 		return singleConsole;
 	}

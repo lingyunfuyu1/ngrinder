@@ -63,6 +63,7 @@
 			        id decimal auto_increment unique,
 			        created_date timestamp,
 			        last_modified_date timestamp,
+			        type integer,
 			        agent_count integer,
 			        description varchar(2048),
 			        distribution_path varchar(255),
@@ -148,7 +149,9 @@
 			    create index last_modified_user_index on PERF_TEST (last_modified_user)
 			
 			    create index created_user_index on PERF_TEST (created_user)
-			
+
+			    create index type_index_PERF_TEST on PERF_TEST (type);
+
 			    create index scheduled_time_index on PERF_TEST (scheduled_time)
 			
 			    create index last_modified_user_index on TAG (last_modified_user)

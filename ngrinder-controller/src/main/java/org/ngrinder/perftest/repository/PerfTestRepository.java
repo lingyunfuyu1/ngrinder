@@ -1,4 +1,4 @@
-/* 
+/*
  * Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
  *  You may obtain a copy of the License at
@@ -9,12 +9,13 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License. 
+ * limitations under the License.
  */
 package org.ngrinder.perftest.repository;
 
 import org.ngrinder.model.PerfTest;
 import org.ngrinder.model.Status;
+import org.ngrinder.model.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -105,4 +106,14 @@ public interface PerfTestRepository extends JpaRepository<PerfTest, Long>, JpaSp
 	 */
 	@Query("select p from PerfTest  p where p.startTime between ?1 and ?2")
 	List<PerfTest> findAllByCreatedTime(Date start, Date end);
+
+	/**
+	 * Find all {@link PerfTest}s having the given tag ordered by createdTime descending.
+	 *
+	 * @param type   type
+	 * @return {@link PerfTest} list
+	 */
+	@Query("select p from PerfTest  p where p.type=?1 order by p.createdDate desc")
+	List<PerfTest> findAllByTypeOrderByCreatedTimeDesc(int type);
+
 }

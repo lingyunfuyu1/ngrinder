@@ -1,4 +1,4 @@
-/* 
+/*
  * Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
  *  You may obtain a copy of the License at
@@ -9,13 +9,12 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License. 
+ * limitations under the License.
  */
 package org.ngrinder.perftest.controller;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-
 import net.grinder.util.LogCompressUtils;
 import net.grinder.util.Pair;
 import org.apache.commons.io.FilenameUtils;
@@ -33,7 +32,9 @@ import org.ngrinder.infra.config.Config;
 import org.ngrinder.infra.logger.CoreLogger;
 import org.ngrinder.infra.spring.RemainedPath;
 import org.ngrinder.model.*;
+import org.ngrinder.perftest.PerfTestConstants;
 import org.ngrinder.perftest.service.AgentManager;
+import org.ngrinder.perftest.service.PerfTestScheduledTaskService;
 import org.ngrinder.perftest.service.PerfTestService;
 import org.ngrinder.perftest.service.TagService;
 import org.ngrinder.region.service.RegionService;
@@ -54,10 +55,13 @@ import org.springframework.http.HttpEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.ModelMap;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.context.support.WebApplicationContextUtils;
+import org.springframework.web.context.support.XmlWebApplicationContext;
 
 import javax.annotation.Nullable;
 import javax.annotation.PostConstruct;
 import javax.servlet.ServletOutputStream;
+import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.File;
 import java.io.FileInputStream;
@@ -108,6 +112,9 @@ public class PerfTestController extends BaseController {
 	@Autowired
 	private RegionService regionService;
 
+	@Autowired
+	private PerfTestScheduledTaskService perfTestScheduledTaskService;
+
 	private Gson fileEntryGson;
 
 	/**
@@ -131,6 +138,7 @@ public class PerfTestController extends BaseController {
 	 * @param model       modelMap
 	 * @return perftest/list
 	 */
+	// zilingFlag
 	@RequestMapping({"/list", "/", ""})
 	public String getAll(User user, @RequestParam(required = false) String query,
 	                     @RequestParam(required = false) String tag, @RequestParam(required = false) String queryFilter,
@@ -317,6 +325,7 @@ public class PerfTestController extends BaseController {
 	 * @param model    model
 	 * @return redirect:/perftest/list
 	 */
+	// zilingFlag
 	@RequestMapping(value = "/new", method = RequestMethod.POST)
 	public String saveOne(User user, PerfTest perfTest,
 	                      @RequestParam(value = "isClone", required = false, defaultValue = "false") boolean isClone, ModelMap model) {
@@ -1018,6 +1027,22 @@ public class PerfTestController extends BaseController {
 		PerfTest savePerfTest = perfTestService.save(user, newOne);
 		CoreLogger.LOGGER.info("test {} is created through web api by {}", savePerfTest.getId(), user.getUserId());
 		return toJsonHttpEntity(savePerfTest);
+	}
+
+	/**
+	 * 手工触发定时任务.
+	 *
+	 * @param user user
+	 * @return success json messages if succeeded.
+	 */
+	@RestAPI
+	@RequestMapping(value = "/api/gsp", method = RequestMethod.GET)
+	public HttpEntity<String> runScheduledTask(User user) {
+		if (!PerfTestConstants.SpecialUser.SCHEDULED_USER_ID.equals(user.getUserId())) {
+			return toJsonHttpEntity("[FAILED] 操作失败，只有scheduler用户有这个权限!");
+		}
+		perfTestScheduledTaskService.generateScheduledPerfTests();
+		return toJsonHttpEntity("[SUCCESS] 操作成功，请到性能测试列表页确认结果。");
 	}
 
 }

@@ -120,18 +120,19 @@
 <table class="table table-striped table-bordered ellipsis" id="test_table" style="width:940px">
 	<colgroup>
 		<col width="30">
-		<col width="50">
+		<col width="45">
 		<col>
 		<col>
-		<col width="70">
+		<col width="60">
+		<col width="60">
 	<#if clustered>
 		<col width="70">
 	</#if>
-		<col width="120">
-		<col width="80">
-		<col width="65">
-		<col width="65">
+		<col width="115">
 		<col width="70">
+		<col width="65">
+		<col width="65">
+		<col width="65">
 		<col width="65">
 		<col width="60">
 	</colgroup>
@@ -141,6 +142,7 @@
 		<th class="center nothing" style="padding-left:3px" data-step="4" data-intro="<@spring.message 'intro.list.perftest.status'/>"><@spring.message "common.label.status"/></th>
 		<th id="test_name" name="testName"><@spring.message "perfTest.list.testName"/></th>
 		<th id="script_name" name="scriptName"><@spring.message "perfTest.list.scriptName"/></th>
+		<th id="test_type" name="testType"><@spring.message "perfTest.list.testType"/></th>
 		<th class="nothing"><#if isAdmin??><@spring.message "perfTest.list.owner"/><#else><@spring.message "perfTest.list.modifier.oneLine"/></#if></th>
 	<#if clustered>
 		<th id="region" name="region"><@spring.message "common.region"/></th>
@@ -148,7 +150,8 @@
 		<th id="start_time" name="startTime"><@spring.message "perfTest.list.startTime"/></th>
 		<th class="nothing"><span class="ellipsis"><@spring.message "perfTest.list.threshold"/></th>
 		<th id="tps" name="tps"><@spring.message "perfTest.list.tps"/></th>
-		<th id="mean_test_time" name="meanTestTime" title='<@spring.message "perfTest.list.meantime"/>'>MTT</th>
+	<#--<th id="mean_test_time" name="meanTestTime" title='<@spring.message "perfTest.list.meantime"/>'>MTT</th>-->
+		<th id="mean_test_time" name="meanTestTime"><@spring.message "perfTest.list.meantime"/></th>
 		<th id="errors" class="ellipsis" name="errors"><@spring.message "perfTest.list.errorRate"/></th>
 		<th class="nothing small-border"><@spring.message "perfTest.list.vusers"/></th>
 		<th class="nothing" data-step="5" data-intro="<@spring.message 'intro.list.perftest.actions'/>"><@spring.message "common.label.actions"/></th>
@@ -197,6 +200,15 @@
 					<a href="${req.getContextPath()}/script/detail/${test.scriptName}?r=${(test.scriptRevision)!-1}">${test.scriptName}</a>
 				</#if>
 			</div>
+		</td>
+		<td>
+			<#if test.type == 0>
+				default
+			<#elseif test.type == 1>
+				template
+			<#elseif test.type == 2>
+				task
+			</#if>
 		</td>
 		<td>
 			<div class="ellipsis"
@@ -442,7 +454,7 @@ $(document).ready(function () {
 		}
 		document.forms.test_list_form.submit();
 	});
-	
+
 	$("#introButton").click(function() {
 		introJs().start();
 	});
