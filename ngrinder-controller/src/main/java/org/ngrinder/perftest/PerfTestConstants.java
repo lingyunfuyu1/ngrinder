@@ -9,4 +9,8 @@ public interface PerfTestConstants {
 	public interface ScheduledTaskParam {
 		Long MAX_DURATION = 15 * 60 * 1000L;
 	}
+
+	public interface CommonParam {
+		int WAITING_TIME = 30;
+	}
 }

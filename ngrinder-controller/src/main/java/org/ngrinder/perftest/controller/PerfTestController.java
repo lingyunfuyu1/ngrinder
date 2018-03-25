@@ -43,6 +43,7 @@ import org.ngrinder.script.model.FileCategory;
 import org.ngrinder.script.model.FileEntry;
 import org.ngrinder.script.service.FileEntryService;
 import org.ngrinder.user.service.UserService;
+import org.ngrinder.util.Switch;
 import org.python.google.common.collect.Maps;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -55,13 +56,10 @@ import org.springframework.http.HttpEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.ModelMap;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.context.support.WebApplicationContextUtils;
-import org.springframework.web.context.support.XmlWebApplicationContext;
 
 import javax.annotation.Nullable;
 import javax.annotation.PostConstruct;
 import javax.servlet.ServletOutputStream;
-import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.File;
 import java.io.FileInputStream;
@@ -1040,6 +1038,12 @@ public class PerfTestController extends BaseController {
 	public HttpEntity<String> runScheduledTask(User user) {
 		if (!PerfTestConstants.SpecialUser.SCHEDULED_USER_ID.equals(user.getUserId())) {
 			return toJsonHttpEntity("[FAILED] 操作失败，只有scheduler用户有这个权限!");
+		}
+		if (Switch.boolean_close_gsp) {
+			return toJsonHttpEntity("[FAILED] 操作失败，该功能暂停使用!");
+		}
+		if (Switch.boolean_api_lock) {
+			return toJsonHttpEntity("[FAILED] 操作失败，接口限制调用频率，请" + PerfTestConstants.CommonParam.WAITING_TIME + "秒稍候再试!");
 		}
 		perfTestScheduledTaskService.generateScheduledPerfTests();
 		return toJsonHttpEntity("[SUCCESS] 操作成功，请到性能测试列表页确认结果。");
