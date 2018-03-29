@@ -1,4 +1,4 @@
-/* 
+/*
  * Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
  *  You may obtain a copy of the License at
@@ -9,7 +9,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License. 
+ * limitations under the License.
  */
 package org.ngrinder.perftest.service;
 
@@ -111,7 +111,7 @@ public class PerfTestRunnableTest extends AbstractAgentReadyTest implements Cont
 		sleep(5000);
 		perfTestRunnable.doFinish(false);
 		assertThat(perfTestService.getAllTesting().size(), is(0));
-		assertThat(perfTestService.getNextRunnablePerfTestPerfTestCandidate(), nullValue());
+		assertThat(perfTestService.getNextRunnablePerfTestCandidate(), nullValue());
 		assertThat(consoleManager.getConsoleInUse().size(), is(0));
 	}
 
@@ -120,7 +120,7 @@ public class PerfTestRunnableTest extends AbstractAgentReadyTest implements Cont
 	@Test
 	public void testStartConsole() throws IOException {
 		// Get perf test
-		PerfTest perfTest = perfTestService.getNextRunnablePerfTestPerfTestCandidate();
+		PerfTest perfTest = perfTestService.getNextRunnablePerfTestCandidate();
 		perfTest.setScriptName("/hello/world.py");
 		assertThat(perfTest, not(nullValue()));
 
@@ -167,7 +167,7 @@ public class PerfTestRunnableTest extends AbstractAgentReadyTest implements Cont
 
 		sleep(5000);
 		assertThat(perfTestService.getAllTesting().size(), is(0));
-		assertThat(perfTestService.getNextRunnablePerfTestPerfTestCandidate(), nullValue());
+		assertThat(perfTestService.getNextRunnablePerfTestCandidate(), nullValue());
 		assertThat(consoleManager.getConsoleInUse().size(), is(0));
 	}
 

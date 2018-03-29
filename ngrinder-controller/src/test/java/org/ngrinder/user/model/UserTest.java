@@ -1,4 +1,4 @@
-/* 
+/*
  * Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
  *  You may obtain a copy of the License at
@@ -9,7 +9,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License. 
+ * limitations under the License.
  */
 package org.ngrinder.user.model;
 
@@ -44,7 +44,7 @@ public class UserTest extends AbstractNGrinderTransactionalTest {
 	@Autowired
 	private TagRepository tagRepository;
 
-	
+
 	@Before
 	public void before() {
 		List<PerfTest> findAll = perfTestRepository.findAll();
@@ -59,7 +59,7 @@ public class UserTest extends AbstractNGrinderTransactionalTest {
 		userRepository.deleteAll();
 		userRepository.flush();
 	}
-	
+
 	@Test
 	public void testShareUser() {
 		List<User> sharedUsers = new ArrayList<User>();
@@ -71,7 +71,7 @@ public class UserTest extends AbstractNGrinderTransactionalTest {
 		user.setCreatedUser(getUser("user"));
 		user.setCreatedDate(new Date());
 		user.setUserId("hello");
-		user.setRole(Role.USER);
+		user.setRole(Role.GENERAL_USER);
 		user = userRepository.save(user);
 		User user2 = new User();
 		user2.setUserId("hello2");
@@ -79,25 +79,25 @@ public class UserTest extends AbstractNGrinderTransactionalTest {
 		user2.setEmail("junoyoon2@paran.com");
 		user2.setCreatedUser(getUser("user"));
 		user2.setCreatedDate(new Date());
-		user2.setRole(Role.USER);
+		user2.setRole(Role.GENERAL_USER);
 		userRepository.save(user2);
-		
+
 		User user3 = new User();
 		user3.setUserId("hello3");
 		user3.setUserName("MyName3");
 		user3.setEmail("junoyoon3@paran.com");
 		user3.setCreatedUser(getUser("user"));
 		user3.setCreatedDate(new Date());
-		user3.setRole(Role.USER);
+		user3.setRole(Role.GENERAL_USER);
 		userRepository.save(user3);
-		
+
 		User user4 = new User();
 		user4.setUserId("hello4");
 		user4.setUserName("MyName4");
 		user4.setEmail("junoyoon4@paran.com");
 		user4.setCreatedUser(getUser("user"));
 		user4.setCreatedDate(new Date());
-		user4.setRole(Role.USER);
+		user4.setRole(Role.GENERAL_USER);
 		sharedUsers.add(user3);
 		sharedUsers.add(user2);
 
@@ -110,7 +110,7 @@ public class UserTest extends AbstractNGrinderTransactionalTest {
 		List<User> sh = sharedUser.getFollowers();
 		LOG.debug("sharedUser.getFollowers:{}", sh);
 	}
-	
+
 
 	@Test
 	public void testUser() {
@@ -120,7 +120,7 @@ public class UserTest extends AbstractNGrinderTransactionalTest {
 		user.setCreatedUser(getUser("user"));
 		user.setCreatedDate(new Date());
 		user.setUserId("hello");
-		user.setRole(Role.USER);
+		user.setRole(Role.GENERAL_USER);
 		user = userRepository.save(user);
 		User user2 = new User();
 		user2.setUserId("hello2");
@@ -128,7 +128,7 @@ public class UserTest extends AbstractNGrinderTransactionalTest {
 		user2.setEmail("junoyoon@paran.com");
 		user2.setCreatedUser(getUser("user"));
 		user2.setCreatedDate(new Date());
-		user2.setRole(Role.USER);
+		user2.setRole(Role.GENERAL_USER);
 		userRepository.save(user2);
 
 		assertThat(userRepository.count(), is(2L));

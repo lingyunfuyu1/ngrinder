@@ -1,4 +1,4 @@
-/* 
+/*
  * Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
  *  You may obtain a copy of the License at
@@ -9,7 +9,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License. 
+ * limitations under the License.
  */
 package org.ngrinder.user.controller;
 
@@ -91,9 +91,9 @@ public class UserControllerTest extends AbstractNGrinderTransactionalTest {
 		assertThat(user.getPassword(), is(currUser.getPassword()));
 
 		User admin = getAdminUser();
-		User temp = new User("temp1", "temp1", "temp1", "temp@nhn.com", Role.USER);
+		User temp = new User("temp1", "temp1", "temp1", "temp@nhn.com", Role.GENERAL_USER);
 		userController.save(admin, temp, model);
-		temp = new User("temp2", "temp2", "temp2", "temp@nhn.com", Role.USER);
+		temp = new User("temp2", "temp2", "temp2", "temp@nhn.com", Role.GENERAL_USER);
 		userController.save(admin, temp, model);
 		model.clear();
 		currUser.setFollowersStr("temp1, temp2");
@@ -109,7 +109,7 @@ public class UserControllerTest extends AbstractNGrinderTransactionalTest {
 		// test update the role of current user.
 		ModelMap model = new ModelMap();
 		User currUser = getTestUser();
-		assertThat(currUser.getRole(), is(Role.USER)); // current test user is "USER"
+		assertThat(currUser.getRole(), is(Role.GENERAL_USER)); // current test user is "USER"
 
 		User updatedUser = new User(currUser.getUserId(), currUser.getUserName(), currUser.getPassword(),
 				"temp@nhn.com", currUser.getRole());
@@ -122,7 +122,7 @@ public class UserControllerTest extends AbstractNGrinderTransactionalTest {
 		User user = (User) model.get("user");
 		assertThat(user.getUserName(), is(currUser.getUserName()));
 		assertThat(user.getPassword(), is(currUser.getPassword()));
-		assertThat(user.getRole(), is(Role.USER));
+		assertThat(user.getRole(), is(Role.GENERAL_USER));
 	}
 
 	private void saveTestUser(String userId, String userName) {
@@ -132,7 +132,7 @@ public class UserControllerTest extends AbstractNGrinderTransactionalTest {
 		newUser.setEmail("junoyoon@gmail.com");
 		newUser.setCreatedUser(getTestUser());
 		newUser.setCreatedDate(new Date());
-		newUser.setRole(Role.USER);
+		newUser.setRole(Role.GENERAL_USER);
 		ModelMap model = new ModelMap();
 		userController.save(getAdminUser(), newUser, model);
 	}
@@ -162,7 +162,7 @@ public class UserControllerTest extends AbstractNGrinderTransactionalTest {
 		model.clear();
 		userController.delete(testUser, "NewUserId1", model);
 		model.clear();
-		userController.getAll(model, Role.USER, page, "NewUserName");
+		userController.getAll(model, Role.GENERAL_USER, page, "NewUserName");
 		userList = (PageImpl<User>) model.get("users");
 		assertThat(userList.getContent().size(), is(2));
 
@@ -170,7 +170,7 @@ public class UserControllerTest extends AbstractNGrinderTransactionalTest {
 		model.clear();
 		userController.delete(testUser, "NewUserId2,NewUserId3", model);
 		model.clear();
-		userController.getAll(model, Role.USER, page, "NewUserName");
+		userController.getAll(model, Role.GENERAL_USER, page, "NewUserName");
 		userList = (PageImpl<User>) model.get("users");
 		assertThat(userList.getContent().size(), is(0));
 	}
@@ -201,7 +201,7 @@ public class UserControllerTest extends AbstractNGrinderTransactionalTest {
 	public void testSwitchOptions() {
 		ModelMap model = new ModelMap();
 		User currUser = getTestUser();
-		User temp = new User("temp1", "temp1", "temp1", "temp@nhn.com", Role.USER);
+		User temp = new User("temp1", "temp1", "temp1", "temp@nhn.com", Role.GENERAL_USER);
 		User admin = getAdminUser();
 		userController.save(admin, temp, model);
 		currUser.setOwners(Lists.newArrayList(temp));

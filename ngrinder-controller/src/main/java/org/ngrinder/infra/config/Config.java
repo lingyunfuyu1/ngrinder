@@ -76,6 +76,8 @@ public class Config extends AbstractConfig implements ControllerConstants, Clust
 	private PropertiesWrapper internalProperties;
 	private PropertiesWrapper controllerProperties;
 	private PropertiesWrapper databaseProperties;
+	private PropertiesWrapper scheduleProperties;
+	private PropertiesWrapper apiProperties;
 	private PropertiesWrapper clusterProperties;
 	private String announcement = "";
 	private Date announcementDate;
@@ -88,6 +90,8 @@ public class Config extends AbstractConfig implements ControllerConstants, Clust
 
 	protected PropertiesKeyMapper internalPropertiesKeyMapper = PropertiesKeyMapper.create("internal-properties.map");
 	protected PropertiesKeyMapper databasePropertiesKeyMapper = PropertiesKeyMapper.create("database-properties.map");
+	protected PropertiesKeyMapper schedulePropertiesKeyMapper = PropertiesKeyMapper.create("schedule-properties.map");
+	protected PropertiesKeyMapper apiPropertiesKeyMapper = PropertiesKeyMapper.create("api-properties.map");
 	protected PropertiesKeyMapper controllerPropertiesKeyMapper = PropertiesKeyMapper.create("controller-properties.map");
 	protected PropertiesKeyMapper clusterPropertiesKeyMapper = PropertiesKeyMapper.create("cluster-properties.map");
 
@@ -138,6 +142,8 @@ public class Config extends AbstractConfig implements ControllerConstants, Clust
 			addChangeConfigListenerForStatistics();
 			loadAnnouncement();
 			loadDatabaseProperties();
+			loadScheduleProperties();
+			loadApiProperties();
 		} catch (IOException e) {
 			throw new ConfigurationException("Error while init nGrinder", e);
 		}
@@ -418,6 +424,28 @@ public class Config extends AbstractConfig implements ControllerConstants, Clust
 	}
 
 	/**
+	 * Load database related properties. (database.conf)
+	 */
+	protected void loadScheduleProperties() {
+		checkNotNull(home);
+		Properties properties = home.getProperties("schedule.conf");
+		properties.put("NGRINDER_HOME", home.getDirectory().getAbsolutePath());
+		properties.putAll(System.getProperties());
+		scheduleProperties = new PropertiesWrapper(properties, schedulePropertiesKeyMapper);
+	}
+
+	/**
+	 * Load database related properties. (database.conf)
+	 */
+	protected void loadApiProperties() {
+		checkNotNull(home);
+		Properties properties = home.getProperties("api.conf");
+		properties.put("NGRINDER_HOME", home.getDirectory().getAbsolutePath());
+		properties.putAll(System.getProperties());
+		apiProperties = new PropertiesWrapper(properties, apiPropertiesKeyMapper);
+	}
+
+	/**
 	 * Load system related properties. (system.conf)
 	 */
 	public synchronized void loadProperties() {
@@ -434,6 +462,8 @@ public class Config extends AbstractConfig implements ControllerConstants, Clust
 		// Override if exists
 		controllerProperties = new PropertiesWrapper(properties, controllerPropertiesKeyMapper);
 		clusterProperties = new PropertiesWrapper(properties, clusterPropertiesKeyMapper);
+		scheduleProperties = new PropertiesWrapper(properties, schedulePropertiesKeyMapper);
+		apiProperties = new PropertiesWrapper(properties, apiPropertiesKeyMapper);
 	}
 
 	/**
@@ -524,6 +554,24 @@ public class Config extends AbstractConfig implements ControllerConstants, Clust
 			databaseProperties.addProperty(PROP_DATABASE_UNIT_TEST, "true");
 		}
 		return databaseProperties;
+	}
+
+	/**
+	 * Get the schedule properties.
+	 *
+	 * @return {@link PropertiesWrapper} which is loaded from system.conf.
+	 */
+	public PropertiesWrapper getScheduleProperties() {
+		return checkNotNull(scheduleProperties);
+	}
+
+	/**
+	 * Get the schedule properties.
+	 *
+	 * @return {@link PropertiesWrapper} which is loaded from system.conf.
+	 */
+	public PropertiesWrapper getApiProperties() {
+		return checkNotNull(apiProperties);
 	}
 
 	/**

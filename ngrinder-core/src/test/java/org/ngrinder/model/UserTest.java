@@ -1,4 +1,4 @@
-/* 
+/*
  * Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
  *  You may obtain a copy of the License at
@@ -9,7 +9,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License. 
+ * limitations under the License.
  */
 package org.ngrinder.model;
 
@@ -21,7 +21,7 @@ import org.junit.Test;
 
 /**
  * Class description.
- * 
+ *
  * @author Mavlarn
  * @since
  */
@@ -29,12 +29,12 @@ public class UserTest {
 
 	@Test
 	public void testValidate() {
-		User user1 = new User("Uid1", "name1", "pwd1", "user1@nhn.com", Role.USER);
+		User user1 = new User("Uid1", "name1", "pwd1", "user1@nhn.com", Role.GENERAL_USER);
 		user1.setEmail("aa@bb.com");
 		assertTrue(user1.validate());
 
 		User user2 = new User();
-		user2 = new User("Uid1", null, "pwd1", "user2@nhn.com", Role.USER);
+		user2 = new User("Uid1", null, "pwd1", "user2@nhn.com", Role.GENERAL_USER);
 		assertTrue(!user2.validate());
 
 		user2 = new User("Uid1", "name", "pwd1", "user2@nhn.com", null);
@@ -49,8 +49,8 @@ public class UserTest {
 
 	@Test
 	public void testEqualsObject() {
-		User user1 = new User("Uid1", "name1", "pwd1", "user1@nhn.com", Role.USER);
-		User user2 = new User("Uid1", "name2", "pwd2", "user2@nhn.com", Role.USER);
+		User user1 = new User("Uid1", "name1", "pwd1", "user1@nhn.com", Role.GENERAL_USER);
+		User user2 = new User("Uid1", "name2", "pwd2", "user2@nhn.com", Role.GENERAL_USER);
 		assertThat(user1, is(user2));
 		assertThat(user1.hashCode(), is(user2.hashCode()));
 

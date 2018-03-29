@@ -164,7 +164,7 @@ public class PerfTestRunnable implements ControllerConstants {
 	}
 
 	private PerfTest getRunnablePerfTest() {
-		return perfTestService.getNextRunnablePerfTestPerfTestCandidate();
+		return perfTestService.getNextRunnablePerfTestCandidate();
 	}
 
 	private boolean canExecuteMore() {
@@ -521,7 +521,7 @@ public class PerfTestRunnable implements ControllerConstants {
 		LOG.info("Cancel test {} by user request.", perfTest.getId());
 		singleConsoleInUse.unregisterSampling();
 		try {
-			perfTestService.markProgressAndStatusAndFinishTimeAndStatistics(perfTest, CANCELED,
+			perfTestService.markStatusAndProgressAndFinishTimeAndStatistics(perfTest, CANCELED,
 					"Stop requested by user");
 		} catch (Exception e) {
 			LOG.error("Error while canceling test {} : {}", perfTest.getId(), e.getMessage());
@@ -540,7 +540,7 @@ public class PerfTestRunnable implements ControllerConstants {
 	public void doTerminate(PerfTest perfTest, SingleConsole singleConsoleInUse) {
 		singleConsoleInUse.unregisterSampling();
 		try {
-			perfTestService.markProgressAndStatusAndFinishTimeAndStatistics(perfTest, Status.STOP_BY_ERROR,
+			perfTestService.markStatusAndProgressAndFinishTimeAndStatistics(perfTest, Status.STOP_BY_ERROR,
 					"Stopped by error");
 		} catch (Exception e) {
 			LOG.error("Error while terminating {} : {}", perfTest.getTestIdentifier(), e.getMessage());
@@ -563,13 +563,13 @@ public class PerfTestRunnable implements ControllerConstants {
 		try {
 			// stop target host monitor
 			if (perfTestService.hasTooManyError(perfTest)) {
-				perfTestService.markProgressAndStatusAndFinishTimeAndStatistics(perfTest, Status.STOP_BY_ERROR,
+				perfTestService.markStatusAndProgressAndFinishTimeAndStatistics(perfTest, Status.STOP_BY_ERROR,
 						"[WARNING] The test is finished but contains too much errors(over 30% of total runs).");
 			} else if (singleConsoleInUse.hasNoPerformedTest()) {
-				perfTestService.markProgressAndStatusAndFinishTimeAndStatistics(perfTest, Status.STOP_BY_ERROR,
+				perfTestService.markStatusAndProgressAndFinishTimeAndStatistics(perfTest, Status.STOP_BY_ERROR,
 						"[WARNING] The test is finished but has no TPS.");
 			} else {
-				perfTestService.markProgressAndStatusAndFinishTimeAndStatistics(perfTest, Status.FINISHED,
+				perfTestService.markStatusAndProgressAndFinishTimeAndStatistics(perfTest, Status.FINISHED,
 						"The test is successfully finished.");
 			}
 		} catch (Exception e) {

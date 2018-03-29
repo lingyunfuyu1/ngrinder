@@ -1,4 +1,4 @@
-/* 
+/*
  * Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
  *  You may obtain a copy of the License at
@@ -9,7 +9,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License. 
+ * limitations under the License.
  */
 package org.ngrinder.security;
 
@@ -27,20 +27,20 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * nGrinder {@link PreAuthenticatedAuthenticationProvider}.
- * 
+ *
  * Some SSO system like SiteMinder doesn't need nGrinder login page. If the user info is resolved by plugins
  * implementing {@link javax.servlet.Filter} which stores the {@link Authentication} by following code,
- * 
+ *
  * <code>
  * SecurityContextHolder.getContext().setAuthentication(authenticate);
  * </code>
- * 
+ *
  * {@link NGrinderAuthenticationPreAuthProvider} will take this Authentication Object and handles user language and
  * timezone settings and user save
- * 
+ *
  * @author JunHo Yoon
  * @since 3.0
- * 
+ *
  */
 public class NGrinderAuthenticationPreAuthProvider extends PreAuthenticatedAuthenticationProvider {
 
@@ -53,10 +53,10 @@ public class NGrinderAuthenticationPreAuthProvider extends PreAuthenticatedAuthe
 
 	/**
 	 * Authenticate the given PreAuthenticatedAuthenticationToken.
-	 * 
+	 *
 	 * If the principal contained in the authentication object is null, the request will be ignored to allow other
 	 * providers to authenticate it.
-	 * 
+	 *
 	 * @param authentication
 	 *            authentication
 	 * @return authorized {@link Authentication}
@@ -85,7 +85,7 @@ public class NGrinderAuthenticationPreAuthProvider extends PreAuthenticatedAuthe
 
 	/**
 	 * Add new user into local db.
-	 * 
+	 *
 	 * @param securedUser
 	 *            user
 	 */
@@ -99,7 +99,7 @@ public class NGrinderAuthenticationPreAuthProvider extends PreAuthenticatedAuthe
 			user = findOneByUserId.merge(user);
 		}
 		if (user.getRole() == null) {
-			user.setRole(Role.USER);
+			user.setRole(Role.GENERAL_USER);
 		}
 		User savedUser = userService.save(user);
 		securedUser.setUser(savedUser);

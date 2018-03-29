@@ -23,6 +23,7 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.math.NumberUtils;
 import org.apache.commons.lang.mutable.MutableInt;
 import org.ngrinder.agent.service.AgentManagerService;
+import org.ngrinder.common.constant.APIConstants;
 import org.ngrinder.common.constant.ControllerConstants;
 import org.ngrinder.common.controller.BaseController;
 import org.ngrinder.common.controller.RestAPI;
@@ -32,9 +33,8 @@ import org.ngrinder.infra.config.Config;
 import org.ngrinder.infra.logger.CoreLogger;
 import org.ngrinder.infra.spring.RemainedPath;
 import org.ngrinder.model.*;
-import org.ngrinder.perftest.PerfTestConstants;
 import org.ngrinder.perftest.service.AgentManager;
-import org.ngrinder.perftest.service.PerfTestScheduledTaskService;
+import org.ngrinder.perftest.service.PerfTestScheduleService;
 import org.ngrinder.perftest.service.PerfTestService;
 import org.ngrinder.perftest.service.TagService;
 import org.ngrinder.region.service.RegionService;
@@ -43,8 +43,9 @@ import org.ngrinder.script.model.FileCategory;
 import org.ngrinder.script.model.FileEntry;
 import org.ngrinder.script.service.FileEntryService;
 import org.ngrinder.user.service.UserService;
-import org.ngrinder.util.Switch;
 import org.python.google.common.collect.Maps;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -65,6 +66,9 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.net.URL;
 import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static com.google.common.collect.Iterables.filter;
 import static com.google.common.collect.Lists.newArrayList;
@@ -85,6 +89,9 @@ import static org.ngrinder.common.util.Preconditions.*;
 @Controller
 @RequestMapping("/perftest")
 public class PerfTestController extends BaseController {
+	private static final Logger LOGGER = LoggerFactory.getLogger(PerfTestController.class);
+
+	private static boolean api_lock = false;
 
 	@Autowired
 	private PerfTestService perfTestService;
@@ -111,7 +118,7 @@ public class PerfTestController extends BaseController {
 	private RegionService regionService;
 
 	@Autowired
-	private PerfTestScheduledTaskService perfTestScheduledTaskService;
+	private PerfTestScheduleService perfTestScheduleService;
 
 	private Gson fileEntryGson;
 
@@ -136,18 +143,17 @@ public class PerfTestController extends BaseController {
 	 * @param model       modelMap
 	 * @return perftest/list
 	 */
-	// zilingFlag
 	@RequestMapping({"/list", "/", ""})
 	public String getAll(User user, @RequestParam(required = false) String query,
-	                     @RequestParam(required = false) String tag, @RequestParam(required = false) String queryFilter,
-	                     @PageableDefault(page = 0, size = 10) Pageable pageable, ModelMap model) {
+						 @RequestParam(required = false) String tag, @RequestParam(required = false) String queryFilter,
+						 @PageableDefault(page = 0, size = 10) Pageable pageable, ModelMap model) {
 		pageable = new PageRequest(pageable.getPageNumber(), pageable.getPageSize(),
-						defaultIfNull(pageable.getSort(),
-						new Sort(Direction.DESC, "lastModifiedDate")));
+			defaultIfNull(pageable.getSort(),
+				new Sort(Direction.DESC, "lastModifiedDate")));
 		Page<PerfTest> tests = perfTestService.getPagedAll(user, query, tag, queryFilter, pageable);
 		if (tests.getNumberOfElements() == 0) {
 			pageable = new PageRequest(0, pageable.getPageSize(), defaultIfNull(pageable.getSort(),
-							new Sort(Direction.DESC, "lastModifiedDate")));
+				new Sort(Direction.DESC, "lastModifiedDate")));
 			tests = perfTestService.getPagedAll(user, query, tag, queryFilter, pageable);
 		}
 		annotateDateMarker(tests);
@@ -168,7 +174,7 @@ public class PerfTestController extends BaseController {
 		for (PerfTest test : tests) {
 			Calendar localedModified = Calendar.getInstance(userTZ);
 			localedModified.setTime(DateUtils.convertToUserDate(getCurrentUser().getTimeZone(),
-					test.getLastModifiedDate()));
+				test.getLastModifiedDate()));
 			if (org.apache.commons.lang.time.DateUtils.isSameDay(userToday, localedModified)) {
 				test.setDateString("today");
 			} else if (org.apache.commons.lang.time.DateUtils.isSameDay(userYesterday, localedModified)) {
@@ -259,7 +265,7 @@ public class PerfTestController extends BaseController {
 		model.addAttribute(PARAM_SECURITY_MODE, getConfig().isSecurityEnabled());
 		model.addAttribute(PARAM_MAX_RUN_HOUR, agentManager.getMaxRunHour());
 		model.addAttribute(PARAM_SAFE_FILE_DISTRIBUTION,
-				getConfig().getControllerProperties().getPropertyBoolean(ControllerConstants.PROP_CONTROLLER_SAFE_DIST));
+			getConfig().getControllerProperties().getPropertyBoolean(ControllerConstants.PROP_CONTROLLER_SAFE_DIST));
 		String timeZone = getCurrentUser().getTimeZone();
 		int offset;
 		if (StringUtils.isNotBlank(timeZone)) {
@@ -281,12 +287,12 @@ public class PerfTestController extends BaseController {
 	 */
 	@RequestMapping("/quickstart")
 	public String getQuickStart(User user,
-	                            @RequestParam(value = "url", required = true) String urlString,
-	                            @RequestParam(value = "scriptType", required = true) String scriptType,
-	                            ModelMap model) {
+								@RequestParam(value = "url", required = true) String urlString,
+								@RequestParam(value = "scriptType", required = true) String scriptType,
+								ModelMap model) {
 		URL url = checkValidURL(urlString);
 		FileEntry newEntry = fileEntryService.prepareNewEntryForQuickTest(user, urlString,
-				scriptHandlerFactory.getHandler(scriptType));
+			scriptHandlerFactory.getHandler(scriptType));
 		model.addAttribute(PARAM_QUICK_SCRIPT, newEntry.getPath());
 		model.addAttribute(PARAM_QUICK_SCRIPT_REVISION, newEntry.getRevision());
 		model.addAttribute(PARAM_TEST, createPerfTestFromQuickStart(user, "Test for " + url.getHost(), url.getHost()));
@@ -326,7 +332,7 @@ public class PerfTestController extends BaseController {
 	// zilingFlag
 	@RequestMapping(value = "/new", method = RequestMethod.POST)
 	public String saveOne(User user, PerfTest perfTest,
-	                      @RequestParam(value = "isClone", required = false, defaultValue = "false") boolean isClone, ModelMap model) {
+						  @RequestParam(value = "isClone", required = false, defaultValue = "false") boolean isClone, ModelMap model) {
 
 		validate(user, null, perfTest);
 		// Point to the head revision
@@ -351,39 +357,39 @@ public class PerfTestController extends BaseController {
 		newOne = oldOne.merge(newOne);
 		checkNotEmpty(newOne.getTestName(), "testName should be provided");
 		checkArgument(newOne.getStatus().equals(Status.READY) || newOne.getStatus().equals(Status.SAVED),
-				"status only allows SAVE or READY");
+			"status only allows SAVE or READY");
 		if (newOne.isThresholdRunCount()) {
 			final Integer runCount = newOne.getRunCount();
 			checkArgument(runCount > 0 && runCount <= agentManager
 					.getMaxRunCount(),
-					"runCount should be equal to or less than %s", agentManager.getMaxRunCount());
+				"runCount should be equal to or less than %s", agentManager.getMaxRunCount());
 		} else {
 			final Long duration = newOne.getDuration();
 			checkArgument(duration > 0 && duration <= (((long) agentManager.getMaxRunHour()) *
 					3600000L),
-					"duration should be equal to or less than %s", agentManager.getMaxRunHour());
+				"duration should be equal to or less than %s", agentManager.getMaxRunHour());
 		}
 		Map<String, MutableInt> agentCountMap = agentManagerService.getAvailableAgentCountMap(user);
 		MutableInt agentCountObj = agentCountMap.get(isClustered() ? newOne.getRegion() : Config.NONE_REGION);
 		checkNotNull(agentCountObj, "region should be within current region list");
 		int agentMaxCount = agentCountObj.intValue();
 		checkArgument(newOne.getAgentCount() <= agentMaxCount, "test agent should be equal to or less than %s",
-				agentMaxCount);
+			agentMaxCount);
 		if (newOne.getStatus().equals(Status.READY)) {
 			checkArgument(newOne.getAgentCount() >= 1, "agentCount should be more than 1 when it's READY status.");
 		}
 
 		checkArgument(newOne.getVuserPerAgent() <= agentManager.getMaxVuserPerAgent(),
-				"vuserPerAgent should be equal to or less than %s", agentManager.getMaxVuserPerAgent());
+			"vuserPerAgent should be equal to or less than %s", agentManager.getMaxVuserPerAgent());
 		if (getConfig().isSecurityEnabled()) {
 			checkArgument(StringUtils.isNotEmpty(newOne.getTargetHosts()),
-					"targetHosts should be provided when security mode is enabled");
+				"targetHosts should be provided when security mode is enabled");
 		}
 		if (newOne.getStatus() != Status.SAVED) {
 			checkArgument(StringUtils.isNotBlank(newOne.getScriptName()), "scriptName should be provided.");
 		}
 		checkArgument(newOne.getVuserPerAgent() == newOne.getProcesses() * newOne.getThreads(),
-				"vuserPerAgent should be equal to (processes * threads)");
+			"vuserPerAgent should be equal to (processes * threads)");
 	}
 
 	/**
@@ -398,7 +404,7 @@ public class PerfTestController extends BaseController {
 	@RequestMapping(value = "/{id}/leave_comment", method = RequestMethod.POST)
 	@ResponseBody
 	public String leaveComment(User user, @PathVariable("id") Long id, @RequestParam("testComment") String testComment,
-	                           @RequestParam(value = "tagString", required = false) String tagString) {
+							   @RequestParam(value = "tagString", required = false) String tagString) {
 		perfTestService.addCommentOn(user, id, testComment, tagString);
 		return returnSuccess();
 	}
@@ -424,8 +430,8 @@ public class PerfTestController extends BaseController {
 			result.put("name", getMessages(each.getStatus().getSpringMessageKey()));
 			result.put("icon", each.getStatus().getIconName());
 			result.put("message",
-					StringUtils.replace(each.getProgressMessage() + "\n<b>" + each.getLastProgressMessage() + "</b>\n"
-							+ each.getLastModifiedDateToStr(), "\n", "<br/>"));
+				StringUtils.replace(each.getProgressMessage() + "\n<b>" + each.getLastProgressMessage() + "</b>\n"
+					+ each.getLastModifiedDateToStr(), "\n", "<br/>"));
 			result.put("deletable", each.getStatus().isDeletable());
 			result.put("stoppable", each.getStatus().isStoppable());
 			result.put("reportable", each.getStatus().isReportable());
@@ -563,7 +569,7 @@ public class PerfTestController extends BaseController {
 	 */
 	@RequestMapping(value = "/{id}/download_log/**")
 	public void downloadLog(User user, @PathVariable("id") long id, @RemainedPath String path,
-	                        HttpServletResponse response) {
+							HttpServletResponse response) {
 		getOneWithPermissionCheck(user, id, false);
 		File targetFile = perfTestService.getLogFile(id, path);
 		FileDownloadUtils.downloadFile(response, targetFile);
@@ -660,7 +666,7 @@ public class PerfTestController extends BaseController {
 	@SuppressWarnings("UnusedParameters")
 	@RequestMapping("/{id}/detail_report/monitor")
 	public String getDetailMonitorReport(@PathVariable("id") long id, @RequestParam("targetIP") String targetIP,
-	                                     ModelMap modelMap) {
+										 ModelMap modelMap) {
 		modelMap.addAttribute("targetIP", targetIP);
 		return "perftest/detail_report/monitor";
 	}
@@ -676,7 +682,7 @@ public class PerfTestController extends BaseController {
 	@SuppressWarnings("UnusedParameters")
 	@RequestMapping("/{id}/detail_report/plugin/{plugin}")
 	public String getDetailPluginReport(@PathVariable("id") long id,
-	                                    @PathVariable("plugin") String plugin, @RequestParam("kind") String kind, ModelMap modelMap) {
+										@PathVariable("plugin") String plugin, @RequestParam("kind") String kind, ModelMap modelMap) {
 		modelMap.addAttribute("plugin", plugin);
 		modelMap.addAttribute("kind", kind);
 		return "perftest/detail_report/plugin";
@@ -716,7 +722,7 @@ public class PerfTestController extends BaseController {
 	public HttpEntity<String> getStatuses(User user, @RequestParam(value = "ids", defaultValue = "") String ids) {
 		List<PerfTest> perfTests = perfTestService.getAll(user, convertString2Long(ids));
 		return toJsonHttpEntity(buildMap("perfTestInfo", perfTestService.getCurrentPerfTestStatistics(), "status",
-				getStatus(perfTests)));
+			getStatus(perfTests)));
 	}
 
 	/**
@@ -733,12 +739,12 @@ public class PerfTestController extends BaseController {
 			user = userService.getOne(ownerId);
 		}
 		List<FileEntry> scripts = newArrayList(filter(fileEntryService.getAll(user),
-				new com.google.common.base.Predicate<FileEntry>() {
-					@Override
-					public boolean apply(@Nullable FileEntry input) {
-						return input != null && input.getFileType().getFileCategory() == FileCategory.SCRIPT;
-					}
-				}));
+			new com.google.common.base.Predicate<FileEntry>() {
+				@Override
+				public boolean apply(@Nullable FileEntry input) {
+					return input != null && input.getFileType().getFileCategory() == FileCategory.SCRIPT;
+				}
+			}));
 		return toJsonHttpEntity(scripts, fileEntryGson);
 	}
 
@@ -753,7 +759,7 @@ public class PerfTestController extends BaseController {
 	 */
 	@RequestMapping("/api/resource")
 	public HttpEntity<String> getResources(User user, @RequestParam String scriptPath,
-	                                       @RequestParam(required = false) String ownerId) {
+										   @RequestParam(required = false) String ownerId) {
 		if (user.getRole() == Role.ADMIN && StringUtils.isNotBlank(ownerId)) {
 			user = userService.getOne(ownerId);
 		}
@@ -814,9 +820,9 @@ public class PerfTestController extends BaseController {
 	@RestAPI
 	@RequestMapping({"/api/{id}/perf", "/api/{id}/graph"})
 	public HttpEntity<String> getPerfGraph(@PathVariable("id") long id,
-	                                       @RequestParam(required = true, defaultValue = "") String dataType,
-	                                       @RequestParam(defaultValue = "false") boolean onlyTotal,
-	                                       @RequestParam int imgWidth) {
+										   @RequestParam(required = true, defaultValue = "") String dataType,
+										   @RequestParam(defaultValue = "false") boolean onlyTotal,
+										   @RequestParam int imgWidth) {
 		String[] dataTypes = checkNotEmpty(StringUtils.split(dataType, ","), "dataType argument should be provided");
 		return toJsonHttpEntity(getPerfGraphData(id, dataTypes, onlyTotal, imgWidth));
 	}
@@ -833,7 +839,7 @@ public class PerfTestController extends BaseController {
 	@RestAPI
 	@RequestMapping("/api/{id}/monitor")
 	public HttpEntity<String> getMonitorGraph(@PathVariable("id") long id,
-	                                          @RequestParam("targetIP") String targetIP, @RequestParam int imgWidth) {
+											  @RequestParam("targetIP") String targetIP, @RequestParam int imgWidth) {
 		return toJsonHttpEntity(getMonitorGraphData(id, targetIP, imgWidth));
 	}
 
@@ -849,8 +855,8 @@ public class PerfTestController extends BaseController {
 	@RestAPI
 	@RequestMapping("/api/{id}/plugin/{plugin}")
 	public HttpEntity<String> getPluginGraph(@PathVariable("id") long id,
-	                                         @PathVariable("plugin") String plugin,
-	                                         @RequestParam("kind") String kind, @RequestParam int imgWidth) {
+											 @PathVariable("plugin") String plugin,
+											 @RequestParam("kind") String kind, @RequestParam int imgWidth) {
 		return toJsonHttpEntity(getReportPluginGraphData(id, plugin, kind, imgWidth));
 	}
 
@@ -878,7 +884,7 @@ public class PerfTestController extends BaseController {
 	@RestAPI
 	@RequestMapping(value = {"/api/last", "/api", "/api/"}, method = RequestMethod.GET)
 	public HttpEntity<String> getAll(User user, @RequestParam(value = "page", defaultValue = "0") int page,
-	                                 @RequestParam(value = "size", defaultValue = "1") int size) {
+									 @RequestParam(value = "size", defaultValue = "1") int size) {
 		PageRequest pageRequest = new PageRequest(page, size, new Sort(Direction.DESC, "id"));
 		Page<PerfTest> testList = perfTestService.getPagedAll(user, null, null, null, pageRequest);
 		return toJsonHttpEntity(testList.getContent());
@@ -932,6 +938,49 @@ public class PerfTestController extends BaseController {
 		checkNotNull(perfTest, "no perftest for %s exits", id);
 		perfTestService.delete(user, id);
 		return successJsonHttpEntity();
+	}
+
+	/**
+	 * Mark the given perf test as a template.
+	 *
+	 * @param user user
+	 * @param ids  perf test ids
+	 * @return json success message if succeeded
+	 */
+	@RestAPI
+	@RequestMapping(value = "/api/update_type", method = RequestMethod.PUT)
+	public HttpEntity<String> updateType(User user, @RequestParam(value = "ids", defaultValue = "") String ids, @RequestParam(value = "type") String type) {
+		if (user.getRole().hasPermission(Permission.MANAGE_SCHEDULED_TASK)) {
+			for (String idStr : StringUtils.split(ids, ",")) {
+				Long id = NumberUtils.toLong(idStr, 0);
+				PerfTest perfTest = getOneWithPermissionCheck(user, id, false);
+				checkNotNull(perfTest, "no perftest for %s exits", id);
+				perfTestService.updateType(perfTest, Type.valueOf(type.toUpperCase()));
+			}
+			return successJsonHttpEntity();
+		} else {
+			return errorJsonHttpEntity();
+		}
+	}
+
+	/**
+	 * Mark the given perf test as a template.
+	 *
+	 * @param user user
+	 * @param id   perf test id
+	 * @return json success message if succeeded
+	 */
+	@RestAPI
+	@RequestMapping(value = "/api/mark_template/{id}", method = RequestMethod.PUT)
+	public HttpEntity<String> markPerfTestTemplate(User user, @PathVariable("id") Long id) {
+		PerfTest perfTest = getOneWithPermissionCheck(user, id, false);
+		checkNotNull(perfTest, "no perftest for %s exits", id);
+		if (user.getRole().hasPermission(Permission.MANAGE_SCHEDULED_TASK)) {
+			perfTestService.updateType(perfTest, Type.TEMPLATE);
+			return successJsonHttpEntity();
+		} else {
+			return errorJsonHttpEntity();
+		}
 	}
 
 
@@ -1021,7 +1070,7 @@ public class PerfTestController extends BaseController {
 		int agentMaxCount = agentCountObj.intValue();
 		checkArgument(newOne.getAgentCount() != 0, "test agent should not be %s", agentMaxCount);
 		checkArgument(newOne.getAgentCount() <= agentMaxCount, "test agent should be equal to or less than %s",
-				agentMaxCount);
+			agentMaxCount);
 		PerfTest savePerfTest = perfTestService.save(user, newOne);
 		CoreLogger.LOGGER.info("test {} is created through web api by {}", savePerfTest.getId(), user.getUserId());
 		return toJsonHttpEntity(savePerfTest);
@@ -1036,17 +1085,53 @@ public class PerfTestController extends BaseController {
 	@RestAPI
 	@RequestMapping(value = "/api/gsp", method = RequestMethod.GET)
 	public HttpEntity<String> runScheduledTask(User user) {
-		if (!PerfTestConstants.SpecialUser.SCHEDULED_USER_ID.equals(user.getUserId())) {
-			return toJsonHttpEntity("[FAILED] 操作失败，只有scheduler用户有这个权限!");
+		if (!user.getRole().hasPermission(Permission.MANAGE_SCHEDULED_TASK)) {
+			return toJsonHttpEntity("[FAILED] 操作失败，没有权限，请联系管理员。");
 		}
-		if (Switch.boolean_close_gsp) {
+		if (getConfig().getApiProperties().getPropertyBoolean(APIConstants.PROP_API_CLOSE)) {
 			return toJsonHttpEntity("[FAILED] 操作失败，该功能暂停使用!");
 		}
-		if (Switch.boolean_api_lock) {
-			return toJsonHttpEntity("[FAILED] 操作失败，接口限制调用频率，请" + PerfTestConstants.CommonParam.WAITING_TIME + "秒稍候再试!");
+		if (api_lock) {
+			return toJsonHttpEntity("[FAILED] 操作失败，接口限制调用频率，间隔时间不少于" + getConfig().getApiProperties().getPropertyInt(APIConstants.PROP_API_INTERVAL_TIME) + "秒，稍候再试!");
 		}
-		perfTestScheduledTaskService.generateScheduledPerfTests();
+		lockAPI();
+		unlockAPI();
+		perfTestScheduleService.batchGenerateSchedulePerfTest();
 		return toJsonHttpEntity("[SUCCESS] 操作成功，请到性能测试列表页确认结果。");
 	}
 
+	public void lockAPI() {
+		api_lock = true;
+	}
+
+	public void unlockAPI() {
+		ExecutorService executorService = Executors.newSingleThreadExecutor();
+		executorService.execute(new Runnable() {
+			@Override
+			public void run() {
+				try {
+					TimeUnit.SECONDS.sleep(getConfig().getApiProperties().getPropertyInt(APIConstants.PROP_API_INTERVAL_TIME));
+					api_lock = false;
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				} finally {
+					LOGGER.error("API解除锁定失败！");
+					api_lock = false;
+				}
+			}
+		});
+	}
+
+	@RestAPI
+	@RequestMapping(value = {"/api/gsp/status"})
+	public HttpEntity<String> gspStatus(User user) {
+		if (!user.getRole().hasPermission(Permission.MANAGE_SCHEDULED_TASK)) {
+			return toJsonHttpEntity("[FAILED] 查询失败，没有权限，请联系管理员。");
+		}
+		if (getConfig().getApiProperties().getPropertyBoolean(APIConstants.PROP_API_CLOSE)) {
+			return toJsonHttpEntity("[INFO] 当前接口处于【关闭】状态，禁止调用。");
+		} else {
+			return toJsonHttpEntity("[INFO] 当前接口处于【开放】状态，可以调用。");
+		}
+	}
 }

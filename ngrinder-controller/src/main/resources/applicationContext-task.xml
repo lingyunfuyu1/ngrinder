@@ -14,7 +14,7 @@
 	<context:property-placeholder location="classpath:application.properties"/>
 	<context:component-scan base-package="org.ngrinder.perftest.service"/>
 	<task:scheduled-tasks>
-		<task:scheduled ref="perfTestScheduledTaskService" method="generateScheduledPerfTests"
+		<task:scheduled ref="perfTestScheduleService" method="batchGenerateSchedulePerfTest"
 						cron="${cron.expression}"/>
 	</task:scheduled-tasks>
 </beans>

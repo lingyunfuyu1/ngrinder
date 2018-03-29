@@ -72,33 +72,51 @@
 	      class="well form-inline search-bar" style="margin-top:0;margin-bottom:0;height:30px;"
 		  action="${req.getContextPath()}/perftest/list" method="GET">
 		<div class="left-float" data-step="3" data-intro="<@spring.message 'intro.list.search'/>">
-			<select id="tag" name="tag" style="width:150px">
+			<select id="tag" name="tag" style="width:100px">
 				<option value=""></option>
 			<@list list_items=availTags others="none"; eachTag >
 				<option value="${eachTag}" <#if tag?? && eachTag == tag>selected </#if> >${eachTag}</option>
 			</@list>
 			</select>
 			<input type="text" class="search-query search-query-without-radios span2" placeholder="Keywords"
-				   name="query" id="query" value="${query!}">
+				   name="query" id="query" value="${query!}" style="width:100px">
 
 			<button type="submit" class="btn" id="search_btn">
-				<i class="icon-search"></i> <@spring.message "common.button.search"/>
+				<i class="icon-search"></i> <#--<@spring.message "common.button.search"/>-->
 			</button>
-			<label class="checkbox" style="position:relative; margin-left:5px">
-				<input type="checkbox" id="running_only_checkbox" name="queryFilter"
+		<#--从checkbox改成radio-->
+			<label class="radio" style="position:relative; margin-left:5px">
+				<input type="radio" id="running_only_radio" name="queryFilter"
 					   <#if queryFilter?? && queryFilter == 'R'>checked</#if>
 					   value="R">
 			<@spring.message "perfTest.action.running"/>
 			</label>
-			<label class="checkbox" style="position:relative; margin-left:5px">
-				<input type="checkbox" id="scheduled_only_checkbox" name="queryFilter"
+			<label class="radio" style="position:relative; margin-left:5px">
+				<input type="radio" id="finished_only_radio" name="queryFilter"
+					   <#if queryFilter?? && queryFilter == 'F'>checked</#if>
+					   value="F">
+			<@spring.message "perfTest.action.finished"/>
+			</label>
+			</label>
+			<label class="radio" style="position:relative; margin-left:5px">
+				<input type="radio" id="scheduled_only_radio" name="queryFilter"
 					   <#if queryFilter?? && queryFilter == 'S'>checked</#if>
 					   value="S">
 			<@spring.message "perfTest.action.scheduled"/>
 			</label>
+			<label class="radio" style="position:relative; margin-left:5px">
+				<input type="radio" id="scheduledx_only_radio" name="queryFilter"
+					   <#if queryFilter?? && queryFilter == 'SX'>checked</#if>
+					   value="SX">
+			<@spring.message "perfTest.action.scheduledX"/>
+			</label>
 		</div>
-
 		<div class="right-float">
+			<a class="btn btn-primary" id="schedule_btn" data-step="1"
+			   data-intro="<@spring.message 'intro.list.create'/>">
+				<i class="icon-file icon-white"></i>
+			<@spring.message "perfTest.action.addToSchedule"/>
+			</a>
 			<a class="btn btn-primary" href="${req.getContextPath()}/perftest/new" id="create_btn" data-step="1" data-intro="<@spring.message 'intro.list.create'/>">
 				<i class="icon-file icon-white"></i>
 			<@spring.message "perfTest.action.createTest"/>
@@ -121,6 +139,7 @@
 	<colgroup>
 		<col width="30">
 		<col width="45">
+		<col width="45">
 		<col>
 		<col>
 		<col width="60">
@@ -134,15 +153,17 @@
 		<col width="65">
 		<col width="65">
 		<col width="65">
-		<col width="60">
+		<col width="80">
 	</colgroup>
 	<thead>
 	<tr id="head_tr_id">
 		<th class="nothing"><input id="chkboxAll" type="checkbox" class="checkbox" value=""></th>
+	<#--这里name字段对应的PerfTest类中的字段-->
+		<th id="id" name="id"><@spring.message "perfTest.list.id"/></th>
 		<th class="center nothing" style="padding-left:3px" data-step="4" data-intro="<@spring.message 'intro.list.perftest.status'/>"><@spring.message "common.label.status"/></th>
 		<th id="test_name" name="testName"><@spring.message "perfTest.list.testName"/></th>
 		<th id="script_name" name="scriptName"><@spring.message "perfTest.list.scriptName"/></th>
-		<th id="test_type" name="testType"><@spring.message "perfTest.list.testType"/></th>
+		<th id="type" name="type"><@spring.message "perfTest.list.type"/></th>
 		<th class="nothing"><#if isAdmin??><@spring.message "perfTest.list.owner"/><#else><@spring.message "perfTest.list.modifier.oneLine"/></#if></th>
 	<#if clustered>
 		<th id="region" name="region"><@spring.message "common.region"/></th>
@@ -159,7 +180,7 @@
 	</thead>
 	<tbody>
 	<#assign testList = testListPage.content/>
-	<#if clustered><#assign column=13/><#else><#assign column=12/></#if>
+	<#if clustered><#assign column=15/><#else><#assign column=14/></#if>
 	<@list list_items=testList others="table_list" colspan="${column}"; test, test_index>
 	<#assign totalVuser = (test.vuserPerAgent) * (test.agentCount) />
 	<#assign deletable = !(test.status.deletable) />
@@ -168,6 +189,9 @@
 		<td class="center">
 			<input id="check_${test.id}" type="checkbox" class="perf_test checkbox" value="${test.id}"
 				   status="${test.status}" <#if deletable>disabled</#if>>
+		</td>
+		<td class="center">
+			${test.id}
 		</td>
 		<td class="center" id="row_${test.id}">
 			<div class="ball" id="ball_${test.id}"
@@ -202,11 +226,11 @@
 			</div>
 		</td>
 		<td>
-			<#if test.type == 0>
+			<#if test.type.ordinal() == 0>
 				default
-			<#elseif test.type == 1>
+			<#elseif test.type.ordinal() == 1>
 				template
-			<#elseif test.type == 2>
+			<#elseif test.type.ordinal() == 2>
 				task
 			</#if>
 		</td>
@@ -266,6 +290,12 @@
 			<i title="<@spring.message "common.button.stop"/>" id="stop_${test.id}"
 			   style="<#if stoppable>display: none;</#if>"
 			   class="icon-stop test-stop pointer-cursor" sid="${test.id}"></i>
+			<i title="<@spring.message 'perfTest.action.addToSchedule'/>" id="add_to_schedule_${test.id}"
+			   style="<#if test.type.ordinal() == 1>display: none;</#if>"
+			   class="icon-plus	test-add-to-schedule pointer-cursor"  sid="${test.id}"></i>
+			<i title="<@spring.message 'perfTest.action.removeFromSchedule'/>" id="remove_from_schedule_${test.id}"
+			   style="<#if test.type.ordinal() != 1>display: none;</#if>"
+			   class="icon-minus test-remove-from-schedule pointer-cursor"  sid="${test.id}"></i>
 		</td>
 	</tr>
 	</@list>
@@ -304,6 +334,24 @@ $(document).ready(function () {
 	$("#nav_test").addClass("active");
 
 	enableCheckboxSelectAll("test_table");
+
+	$("#schedule_btn").click(function () {
+		var list = $("td input:checked");
+		if (list.length == 0) {
+			bootbox.alert("<@spring.message "perfTest.message.schedule.alert"/>", "<@spring.message "common.button.ok"/>");
+			return;
+		}
+
+		bootbox.confirm("<@spring.message "perfTest.message.schedule.confirm"/>", "<@spring.message "common.button.cancel"/>", "<@spring.message "common.button.ok"/>", function (result) {
+			if (result) {
+				var ids = list.map(function () {
+					return $(this).val();
+				}).get().join(",");
+
+				addToSchedule(ids);
+			}
+		});
+	});
 
 	$("#delete_btn").click(function () {
 		var list = $("td input:checked");
@@ -416,6 +464,24 @@ $(document).ready(function () {
 		});
 	});
 
+	$("i.test-add-to-schedule").click(function () {
+		var id = $(this).attr("sid");
+		bootbox.confirm("<@spring.message code="perfTest.message.schedule.add.confirm"/>", "<@spring.message "common.button.cancel"/>", "<@spring.message "common.button.ok"/>", function (result) {
+			if (result) {
+				addToSchedule(id);
+			}
+		});
+	});
+
+	$("i.test-remove-from-schedule").click(function () {
+		var id = $(this).attr("sid");
+		bootbox.confirm("<@spring.message code="perfTest.message.schedule.remove.confirm"/>", "<@spring.message "common.button.cancel"/>", "<@spring.message "common.button.ok"/>", function (result) {
+			if (result) {
+				removeFromSchedule(id);
+			}
+		});
+	});
+
 	$("th").each(function () {
 		var $this = $(this);
 		if (!$this.hasClass("nothing")) {
@@ -444,13 +510,25 @@ $(document).ready(function () {
 		$("#current_running_status_div").toggle();
 	});
 
-	$("#scheduled_only_checkbox, #running_only_checkbox").click(function () {
+	$("#running_only_radio, #finished_only_radio, #scheduled_only_radio, #scheduledx_only_radio").click(function () {
 		var $this = $(this);
 		var checkId = $this.attr("id");
-		if (checkId == "scheduled_only_checkbox") {
-			checkboxReject($this, $("#running_only_checkbox"));
-		} else if (checkId == "running_only_checkbox") {
-			checkboxReject($this, $("#scheduled_only_checkbox"));
+		if (checkId == "running_only_radio") {
+			checkboxReject($this, $("#finished_only_radio"));
+			checkboxReject($this, $("#scheduled_only_radio"));
+			checkboxReject($this, $("#scheduledx_only_radio"));
+		} else if (checkId == "finished_only_radio") {
+			checkboxReject($this, $("#running_only_radio"));
+			checkboxReject($this, $("#scheduled_only_radio"));
+			checkboxReject($this, $("#scheduledx_only_radio"));
+		} else if (checkId == "scheduled_only_radio") {
+			checkboxReject($this, $("#running_only_radio"));
+			checkboxReject($this, $("#finished_only_radio"));
+			checkboxReject($this, $("#scheduledx_only_radio"));
+		} else if (checkId == "scheduledx_only_radio") {
+			checkboxReject($this, $("#running_only_radio"));
+			checkboxReject($this, $("#finished_only_radio"));
+			checkboxReject($this, $("#scheduled_only_radio"));
 		}
 		document.forms.test_list_form.submit();
 	});
@@ -471,6 +549,33 @@ function deleteTests(ids) {
 			"<@spring.message "perfTest.message.delete.success"/>",
 			"<@spring.message "perfTest.message.delete.error"/>");
 	ajaxObj.type = "DELETE";
+	ajaxObj.success = function () {
+		setTimeout(function () {
+			getList();
+		}, 500);
+	};
+	ajaxObj.call();
+}
+
+
+function addToSchedule(ids) {
+	var ajaxObj = new AjaxObj("/perftest/api/update_type?ids=" + ids + "&type=template",
+		"<@spring.message "perfTest.message.schedule.add.success"/>",
+		"<@spring.message "perfTest.message.schedule.add.error"/>");
+	ajaxObj.type = "PUT";
+	ajaxObj.success = function () {
+		setTimeout(function () {
+			getList();
+		}, 500);
+	};
+	ajaxObj.call();
+}
+
+function removeFromSchedule(ids) {
+	var ajaxObj = new AjaxObj("/perftest/api/update_type?ids=" + ids + "&type=default",
+		"<@spring.message "perfTest.message.schedule.remove.success"/>",
+		"<@spring.message "perfTest.message.schedule.remove.error"/>");
+	ajaxObj.type = "PUT";
 	ajaxObj.success = function () {
 		setTimeout(function () {
 			getList();

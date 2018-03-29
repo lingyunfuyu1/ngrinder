@@ -1,4 +1,4 @@
-/* 
+/*
  * Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
  *  You may obtain a copy of the License at
@@ -9,7 +9,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License. 
+ * limitations under the License.
  */
 package org.ngrinder.user.controller;
 
@@ -92,7 +92,7 @@ public class UserSignUpController extends UserController {
 	@RequestMapping("/save")
 	public String save(@ModelAttribute("user") User newUser, ModelMap model) {
 		checkTrue(config.isSignUpEnabled(), "Access to this url is not allowed when sign up is disabled");
-		newUser.setRole(Role.USER);
+		newUser.setRole(Role.GENERAL_USER);
 		userService.createUser(newUser);
 		model.clear();
 		return "redirect:/";

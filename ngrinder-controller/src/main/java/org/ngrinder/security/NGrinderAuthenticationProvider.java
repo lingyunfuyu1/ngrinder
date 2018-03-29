@@ -1,4 +1,4 @@
-/* 
+/*
  * Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
  *  You may obtain a copy of the License at
@@ -9,7 +9,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License. 
+ * limitations under the License.
  */
 package org.ngrinder.security;
 
@@ -41,14 +41,14 @@ import java.util.Date;
 
 /**
  * nGrinder UserDetailsAuthenticationProvider.
- * 
+ *
  * This class validates the user provided ID / Password from login page. Internally it uses the plugins implementing
  * {@link OnLoginRunnable}. If you want to extend user authentification, please create the plugin implementing
  * {@link OnLoginRunnable} interface.
- * 
+ *
  * @author JunHo Yoon
  * @since 3.0
- * 
+ *
  */
 @SuppressWarnings("UnusedDeclaration")
 @Service("ngrinderAuthenticationProvider")
@@ -130,7 +130,7 @@ public class NGrinderAuthenticationProvider extends AbstractUserDetailsAuthentic
 
 	/**
 	 * Add new user into local db.
-	 * 
+	 *
 	 * @param securedUser
 	 *            user
 	 */
@@ -144,7 +144,7 @@ public class NGrinderAuthenticationProvider extends AbstractUserDetailsAuthentic
 			user = newUser.merge(user);
 		}
 		if (user.getRole() == null) {
-			user.setRole(Role.USER);
+			user.setRole(Role.GENERAL_USER);
 		}
 		User savedUser = userService.save(user);
 		securedUser.setUser(savedUser);
@@ -179,7 +179,7 @@ public class NGrinderAuthenticationProvider extends AbstractUserDetailsAuthentic
 	 * For systems which are already using salted password which are encoded with a previous release, the encoder should
 	 * be of type {@code org.springframework.security.authentication.encoding.PasswordEncoder} . Otherwise, the
 	 * recommended approach is to use {@code org.springframework.security.crypto.password.PasswordEncoder}.
-	 * 
+	 *
 	 * @param passwordEncoder
 	 *            must be an instance of one of the {@code PasswordEncoder} types.
 	 */
@@ -231,7 +231,7 @@ public class NGrinderAuthenticationProvider extends AbstractUserDetailsAuthentic
 	 * <p>
 	 * Instead, it is recommended that you use an encoder which uses a random salt and combines it with the password
 	 * field. This is the default approach taken in the {@code org.springframework.security.crypto.password} package.
-	 * 
+	 *
 	 * @param saltSource
 	 *            to use when attempting to decode passwords via the <code>PasswordEncoder</code>
 	 */

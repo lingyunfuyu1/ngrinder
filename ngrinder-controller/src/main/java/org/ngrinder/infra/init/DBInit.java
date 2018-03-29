@@ -1,4 +1,4 @@
-/* 
+/*
  * Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
  *  You may obtain a copy of the License at
@@ -9,7 +9,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License. 
+ * limitations under the License.
  */
 package org.ngrinder.infra.init;
 
@@ -113,9 +113,9 @@ public class DBInit {
 		// If there is no users.. make admin and user and U, S, A roles.
 		if (userRepository.count() < 2) {
 			createUser("admin", "admin", Role.ADMIN, "admin", "admin@nhn.com");
-			createUser("user", "user", Role.USER, "user", "user@nhn.com");
+			createUser("user", "user", Role.GENERAL_USER, "user", "user@nhn.com");
 			createUser("superuser", "superuser", Role.SUPER_USER, "superuser", "superuser@nhn.com");
-			createUser("system", "system", Role.SYSTEM_USER, "system", "system@nhn.com");
+			createUser("system", "system", Role.SYSTEM, "system", "system@nhn.com");
 		}
 	}
 }

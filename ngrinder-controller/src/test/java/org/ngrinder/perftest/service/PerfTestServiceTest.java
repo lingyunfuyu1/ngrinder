@@ -16,6 +16,8 @@ package org.ngrinder.perftest.service;
 import net.grinder.StopReason;
 import net.grinder.common.GrinderProperties;
 import net.grinder.console.model.ConsoleProperties;
+import net.grinder.util.Pair;
+import org.apache.commons.io.FilenameUtils;
 import org.junit.Before;
 import org.junit.Test;
 import org.ngrinder.common.model.Home;
@@ -25,6 +27,7 @@ import org.ngrinder.model.PerfTest;
 import org.ngrinder.model.Status;
 import org.ngrinder.monitor.controller.model.SystemDataModel;
 import org.ngrinder.monitor.share.domain.SystemInfo;
+import org.ngrinder.perftest.model.ProcessCountAndThreadCount;
 import org.ngrinder.perftest.repository.PerfTestRepository;
 import org.ngrinder.perftest.service.monitor.MonitorClientService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -68,7 +71,7 @@ public class PerfTestServiceTest extends AbstractPerfTestTransactionalTest {
 		createPerfTest("new Test1", Status.TESTING, new Date());
 		createPerfTest("new Test2", Status.FINISHED, new Date());
 
-		PerfTest candidate = testService.getNextRunnablePerfTestPerfTestCandidate();
+		PerfTest candidate = testService.getNextRunnablePerfTestCandidate();
 		assertThat(candidate, nullValue());
 
 		Pageable pageable = new PageRequest(0, 10);
@@ -135,7 +138,7 @@ public class PerfTestServiceTest extends AbstractPerfTestTransactionalTest {
 		PerfTest testScript = createPerfTest("new TestScript", Status.READY, new Date());
 		testService.addCommentOn(getTestUser(), testScript.getId(), "this is TestScript method", "");
 
-		PerfTest testing = testService.markProgressAndStatus(testScript, Status.TESTING, "It is testing from ready");
+		PerfTest testing = testService.markStatusAndProgress(testScript, Status.TESTING, "It is testing from ready");
 		assertThat(testing.getStatus(), is(Status.TESTING));
 
 		File testPath = testService.getDistributionPath(testScript);
@@ -244,4 +247,38 @@ public class PerfTestServiceTest extends AbstractPerfTestTransactionalTest {
 
 	}
 
+	@Test
+	public void testCalcProcessCountAndThreadCount(){
+		ProcessCountAndThreadCount processCountAndThreadCount = null;
+		// 1 * 0
+		processCountAndThreadCount = perfTestService.calcProcessCountAndThreadCount(0);
+		// 1 * 1
+		processCountAndThreadCount = perfTestService.calcProcessCountAndThreadCount(1);
+		// 2 * 1
+		processCountAndThreadCount = perfTestService.calcProcessCountAndThreadCount(2);
+		// 2 * 1
+		processCountAndThreadCount = perfTestService.calcProcessCountAndThreadCount(3);
+		// 3 * 27
+		processCountAndThreadCount = perfTestService.calcProcessCountAndThreadCount(83);
+		// 10 * 38
+		processCountAndThreadCount = perfTestService.calcProcessCountAndThreadCount(380);
+		// 10 * 50
+		processCountAndThreadCount = perfTestService.calcProcessCountAndThreadCount(500);
+
+		assertTrue(processCountAndThreadCount != null);
+
+	}
+
+	@Test
+	public void testGetStatisticPath(){
+		PerfTest test = createPerfTest("new test", Status.READY, new Date());
+		perfTestService.save(getTestUser(), test);
+		File file = perfTestService.getStatisticPath(perfTestService.getOne(test.getId()));
+		assertTrue(file != null);
+	}
+
+	@Test
+	public void testZiling(){
+		System.out.println();
+	}
 }

@@ -16,8 +16,8 @@
 </style>
 <div class="row form-horizontal">
 	<div class="option-title span1"><h5><@spring.message "script.option.header.title"/></h5></div>
-	<div id="headers" class="option-data span9">	
-		<i title="Add header" id="addHeaderBtn" class="icon-plus pointer-cursor"></i>				
+	<div id="headers" class="option-data span9">
+		<i title="Add header" id="addHeaderBtn" class="icon-plus pointer-cursor"></i>
 	</div>
 </div>
 <hr class="small">
@@ -52,7 +52,7 @@
 		$("#addHeaderBtn").click(function() {
 			var header = new Pair("header");
 			options.headers.push(header);
-			$("#addHeaderBtn").before(header.getHtml());			
+			$("#addHeaderBtn").before(header.getHtml());
 			$(header.name).autocomplete({
 					minLength : 0,
 					source : headerNames,
@@ -70,7 +70,7 @@
 					}
 				}).focus(autoSearch);
 		});
-		
+
 		$("#addCookieBtn").click(function() {
 			var url = $(".test-url").val();
 			var urlPattern = /^((https?|ftp):\/\/)?([^\/:]*)(:[0-9].*)?(\/)?.*$/i;
@@ -79,14 +79,14 @@
 			options.cookies.push(cookie);
 			$("#addCookieBtn").before(cookie.getHtml());
 		});
-		
+
 		$("#addParamBtn").click(function() {
 			var param = new Pair("param");
 			options.params.push(param);
 			$("#addParamBtn").before(param.getHtml());
 		});
 	});
-	
+
 	function autoSearch() {
 		$(this).autocomplete('search', $(this).val());
 	}
@@ -195,7 +195,7 @@
 	Cookie.prototype.getPath = function() {
 		return this.path.val();
 	}
-	
+
 	function changeHTTPMethod(method) {
 		var i = findHeaderIndex("Content-Type");
 		if (i !== -1) {
@@ -211,7 +211,7 @@
 				header.name.val("Content-Type");
 				header.value.val("application/x-www-form-urlencoded");
 				options.headers.unshift(header);
-				$("#headers").prepend(header.getHtml());			
+				$("#headers").prepend(header.getHtml());
 				$(header.value).autocomplete({
 						minLength : 0,
 						source : ["application/x-www-form-urlencoded", "application/json"],
@@ -229,7 +229,7 @@
 				break;
 		}
 	}
-	
+
 	function findHeaderIndex(name) {
 		var headers = options.headers;
 		for (var i in headers) {
@@ -240,7 +240,7 @@
 		}
 		return -1;
 	}
-	
+
 	function formMode(bOn) {
 		if (bOn) {
 			$("#paramRow").removeClass("hide");

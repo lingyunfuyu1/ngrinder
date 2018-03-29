@@ -1,4 +1,4 @@
-/* 
+/*
  * Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
  *  You may obtain a copy of the License at
@@ -9,7 +9,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License. 
+ * limitations under the License.
  */
 package org.ngrinder.model;
 
@@ -47,12 +47,19 @@ public class User extends BaseModel<User> {
 	private String password;
 
 	@Expose
+	private String email;
+
+	@Expose
+	private String description;
+
+	@Expose
+	@Column(name = "mobile_phone")
+	private String mobilePhone;
+
+	@Expose
 	@Type(type = "true_false")
 	@Column(columnDefinition = "char(1)")
 	private Boolean enabled;
-
-	@Expose
-	private String email;
 
 	@Expose
 	@Enumerated(EnumType.STRING)
@@ -60,18 +67,11 @@ public class User extends BaseModel<User> {
 	private Role role;
 
 	@Expose
-	private String description;
-
-	@Expose
 	private String timeZone;
 
 	@Expose
 	@Column(name = "user_language")
 	private String userLanguage;
-
-	@Expose
-	@Column(name = "mobile_phone")
-	private String mobilePhone;
 
 	@Column(name = "is_external", columnDefinition = "char(1)")
 	@Type(type = "true_false")
@@ -91,11 +91,22 @@ public class User extends BaseModel<User> {
 	@Transient
 	private User ownerUser;
 
+	/**
+	 * followers：当前用户分享给了哪些用户，也就是可以被哪些用户切换到当前用户
+	 * 比如test分享给caojl，caojl分享给ziling，那么caojl的followers是ziling，owners是test，可以切换到test，可以被ziling切换。
+	 * FetchType.LAZY：懒加载，加载一个实体时，定义懒加载的属性不会马上从数据库中加载；FetchType.EAGER：急加载，加载一个实体时，定义急加载的属性会立即从数据库中加载。
+	 * 注解@JoinTable：name-关联表的表名，joinColumns-当前实体对应表(主表)的主键列，inverseJoinColumns-关联实体对应表(从表)的主键列
+	 * 参考：http://www.cnblogs.com/luxh/archive/2012/05/30/2527123.html
+	 *
+	 */
 	@ManyToMany(fetch = FetchType.EAGER)
 	@JoinTable(name = "SHARED_USER", joinColumns = @JoinColumn(name = "owner_id"), // LF
 			inverseJoinColumns = @JoinColumn(name = "follow_id"))
 	private List<User> followers;
 
+	/**
+	 * owners：有哪些用户分享给了当前用户，也就是当前用户可以切换到哪些用户
+	 */
 	@ManyToMany(fetch = FetchType.EAGER)
 	@JoinTable(name = "SHARED_USER", joinColumns = @JoinColumn(name = "follow_id"), // LF
 			inverseJoinColumns = @JoinColumn(name = "owner_id"))
@@ -133,7 +144,7 @@ public class User extends BaseModel<User> {
 		this.mobilePhone = StringUtils.trim(this.mobilePhone);
 		this.enabled = getSafe(this.enabled, true);
 		this.external = getSafe(this.enabled);
-		this.role = getSafe(this.role, Role.USER);
+		this.role = getSafe(this.role, Role.GENERAL_USER);
 	}
 
 	public static User createNew() {
@@ -331,6 +342,15 @@ public class User extends BaseModel<User> {
 		return ownerUser == null ? this : ownerUser;
 	}
 
+
+	public String getFollowersStr() {
+		return followersStr;
+	}
+
+	public void setFollowersStr(String followersStr) {
+		this.followersStr = followersStr;
+	}
+
 	/**
 	 * Get the user simple information.
 	 *
@@ -359,11 +379,4 @@ public class User extends BaseModel<User> {
 		return "User[ID=" + this.getId() + ",name=" + this.getUserId() + ",Role=" + this.getRole() + "]";
 	}
 
-	public String getFollowersStr() {
-		return followersStr;
-	}
-
-	public void setFollowersStr(String followersStr) {
-		this.followersStr = followersStr;
-	}
 }

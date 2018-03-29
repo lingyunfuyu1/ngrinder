@@ -1,4 +1,4 @@
-/* 
+/*
  * Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
  *  You may obtain a copy of the License at
@@ -9,7 +9,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License. 
+ * limitations under the License.
  */
 package org.ngrinder.model;
 
@@ -161,21 +161,11 @@ public enum Status {
 	public static Status[] getProcessingOrTestingTestStatus() {
 		List<Status> status = new ArrayList<Status>();
 		for (Status each : values()) {
-			if (isWorkingStatus(each)) {
+			if (each.getCategory() == StatusCategory.PROGRESSING || each.getCategory() == StatusCategory.TESTING) {
 				status.add(each);
 			}
 		}
 		return status.toArray(new Status[status.size()]);
-	}
-
-	/**
-	 * Check this status is the working status.
-	 *
-	 * @param status status
-	 * @return true if it's in {@link StatusCategory}'s PROCESSING or TESTING.
-	 */
-	private static boolean isWorkingStatus(Status status) {
-		return status.getCategory() == StatusCategory.PROGRESSING || status.getCategory() == StatusCategory.TESTING;
 	}
 
 	/**

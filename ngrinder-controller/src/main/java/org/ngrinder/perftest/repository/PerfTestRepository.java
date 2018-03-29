@@ -15,7 +15,7 @@ package org.ngrinder.perftest.repository;
 
 import org.ngrinder.model.PerfTest;
 import org.ngrinder.model.Status;
-import org.ngrinder.model.User;
+import org.ngrinder.model.Type;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -110,10 +110,21 @@ public interface PerfTestRepository extends JpaRepository<PerfTest, Long>, JpaSp
 	/**
 	 * Find all {@link PerfTest}s having the given tag ordered by createdTime descending.
 	 *
-	 * @param type   type
+	 * @param type   		type
 	 * @return {@link PerfTest} list
 	 */
 	@Query("select p from PerfTest  p where p.type=?1 order by p.createdDate desc")
-	List<PerfTest> findAllByTypeOrderByCreatedTimeDesc(int type);
+	List<PerfTest> findAllByTypeOrderByCreatedTimeDesc(Type type);
+
+	/**
+	 * Update the type on the perf test having the given {@link PerfTest} id.
+	 *
+	 * @param id            {@link PerfTest} id
+	 * @param type    type
+	 * @return the count of updated row
+	 */
+	@Modifying
+	@Query("update PerfTest p set p.type=?2 where p.id=?1")
+	int updateType(Long id, Type type);
 
 }

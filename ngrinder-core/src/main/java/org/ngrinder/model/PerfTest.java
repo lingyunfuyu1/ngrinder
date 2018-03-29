@@ -20,7 +20,6 @@ import org.apache.commons.lang.builder.ReflectionToStringBuilder;
 import org.hibernate.annotations.Index;
 import org.hibernate.annotations.Sort;
 import org.hibernate.annotations.SortType;
-import org.hibernate.annotations.Type;
 import org.ngrinder.common.util.DateUtils;
 import org.ngrinder.common.util.PathUtils;
 
@@ -92,13 +91,13 @@ public class PerfTest extends BaseModel<PerfTest> {
 	/**
 	 * 测试类型
 	 *
-	 * @see org.ngrinder.model.TestType
+	 * @see Type
 	 */
 	@Expose
 	@Cloneable
-	@Column(name = "test_type")
+	@Column(name = "type")
 	@Enumerated(EnumType.ORDINAL)
-	private TestType testType;
+	private Type type;
 
 	/**
 	 * 标签
@@ -258,7 +257,7 @@ public class PerfTest extends BaseModel<PerfTest> {
 	 */
 	@Column(name = "safe_distribution")
 	@Cloneable
-	@Type(type = "true_false")
+	@org.hibernate.annotations.Type(type = "true_false")
 	private Boolean safeDistribution;
 
 	/**
@@ -275,7 +274,7 @@ public class PerfTest extends BaseModel<PerfTest> {
 	@Expose
 	@Cloneable
 	@Column(name = "use_rampup", columnDefinition = "char(1)")
-	@Type(type = "true_false")
+	@org.hibernate.annotations.Type(type = "true_false")
 	private Boolean useRampUp;
 
 	/**
@@ -397,7 +396,7 @@ public class PerfTest extends BaseModel<PerfTest> {
 	 */
 	@Expose
 	@Column(name = "stop_request")
-	@Type(type = "true_false")
+	@org.hibernate.annotations.Type(type = "true_false")
 	private Boolean stopRequest;
 
 	/**
@@ -474,7 +473,7 @@ public class PerfTest extends BaseModel<PerfTest> {
 	@Expose
 	@Cloneable
 	@Column(name = "send_mail", columnDefinition = "char(1)")
-	@Type(type = "true_false")
+	@org.hibernate.annotations.Type(type = "true_false")
 	private Boolean sendMail;
 
 
@@ -495,12 +494,12 @@ public class PerfTest extends BaseModel<PerfTest> {
 		this.description = description;
 	}
 
-	public TestType getTestType() {
-		return testType;
+	public Type getType() {
+		return type;
 	}
 
-	public void setTestType(TestType testType) {
-		this.testType = testType;
+	public void setType(Type type) {
+		this.type = type;
 	}
 
 	public String getTagString() {
@@ -892,7 +891,7 @@ public class PerfTest extends BaseModel<PerfTest> {
 	public void init() {
 		this.testName = getSafe(this.testName, "");
 		this.description = getSafe(this.description, "");
-		this.testType = getSafe(this.testType, TestType.DEFAULT);
+		this.type = getSafe(this.type, Type.DEFAULT);
 		this.tagString = getSafe(this.tagString, "");
 		this.status = getSafe(this.status, Status.SAVED);
 		this.agentCount = getSafe(this.agentCount);

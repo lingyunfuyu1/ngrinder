@@ -1,0 +1,3 @@
+schedule.max_duration,10,
+schedule.close,false,
+schedule.cron_expression,0 0 1 * * ?

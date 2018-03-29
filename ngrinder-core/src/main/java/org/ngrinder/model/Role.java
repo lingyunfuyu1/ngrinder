@@ -1,4 +1,4 @@
-/* 
+/*
  * Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
  *  You may obtain a copy of the License at
@@ -9,32 +9,27 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License. 
+ * limitations under the License.
  */
 package org.ngrinder.model;
 
 /**
  * Role of the User.
- * 
+ *
  * @author JunHo Yoon
  * @since 3.0
  */
 public enum Role {
 	/**
-	 * General user role who can create performance test entry.
-	 */
-	USER("U", "General User") {
-	},
-	/**
 	 * Admin user role who can monitors tests.
 	 */
-	ADMIN("A", "Administrator") {
+	ADMIN("A", "Admin") {
 
 		/**
 		 * Has admin permission or not.
-		 * 
+		 *
 		 * @param type	permission type
-		 * 
+		 *
 		 * @return has the permission or not
 		 */
 		public boolean hasPermission(Permission type) {
@@ -51,19 +46,43 @@ public enum Role {
 				return true;
 			case SWITCH_TO_ANYONE:
 				return true;
+			case MANAGE_SCHEDULED_TASK:
+				return true;
 			default:
 				return false;
 			}
 		}
 	},
+
+	/**
+	 * System role. This is for the automatic batch.
+	 */
+	SYSTEM("SYSTEM", "System") {
+		/**
+		 * Has admin permission or not.
+		 *
+		 * @param type	permission type
+		 *
+		 * @return has the permission or not
+		 */
+		public boolean hasPermission(Permission type) {
+			switch (type) {
+				case MANAGE_SCHEDULED_TASK:
+					return true;
+				default:
+					return false;
+			}
+		}
+	},
+
 	/**
 	 * Super user role who can set system settings and manage user account.
 	 */
-	SUPER_USER("S", "Super User") {
+	SUPER_USER("SU", "Super User") {
 
 		/**
 		 * Has super permission or not.
-		 * 
+		 *
 		 * @param type	permission type
 		 * @return has the permission or not
 		 */
@@ -82,12 +101,13 @@ public enum Role {
 			}
 		}
 	},
-	/**
-	 * System user role. This is for the automatic batch.
-	 */
-	SYSTEM_USER("SYSTEM", "System User") {
 
+	/**
+	 * General user role who can create performance test entry.
+	 */
+	GENERAL_USER("GU", "General User") {
 	};
+
 
 	private final String shortName;
 
@@ -95,7 +115,7 @@ public enum Role {
 
 	/**
 	 * Constructor.
-	 * 
+	 *
 	 * @param shortName	short name of role... usually 1 sing char
 	 * @param fullName	full name of role
 	 */
@@ -106,7 +126,7 @@ public enum Role {
 
 	/**
 	 * Get the short name.
-	 * 
+	 *
 	 * @return short name
 	 */
 	public String getShortName() {
@@ -115,7 +135,7 @@ public enum Role {
 
 	/**
 	 * Get full name.
-	 * 
+	 *
 	 * @return full name
 	 */
 	public String getFullName() {
@@ -124,7 +144,7 @@ public enum Role {
 
 	/**
 	 * check this role whether has permission.
-	 * 
+	 *
 	 * @param type permission type
 	 * @return true if can
 	 */
