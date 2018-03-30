@@ -36,9 +36,9 @@ import org.apache.commons.lang.BooleanUtils;
 import org.apache.commons.lang.StringUtils;
 import org.hibernate.Hibernate;
 import org.ngrinder.common.constant.ControllerConstants;
-import org.ngrinder.common.constant.ScheduleConstants;
 import org.ngrinder.common.constants.GrinderConstants;
 import org.ngrinder.infra.config.Config;
+import org.ngrinder.infra.logger.CoreLogger;
 import org.ngrinder.model.*;
 import org.ngrinder.monitor.controller.model.SystemDataModel;
 import org.ngrinder.perftest.controller.PerfTestController;
@@ -46,6 +46,7 @@ import org.ngrinder.perftest.model.PerfTestStatistics;
 import org.ngrinder.perftest.model.ProcessCountAndThreadCount;
 import org.ngrinder.perftest.repository.PerfTestRepository;
 import org.ngrinder.perftest.service.samplinglistener.MonitorCollectorPlugin;
+import org.ngrinder.perftest.service.samplinglistener.PerfTestSamplingCollectorListener;
 import org.ngrinder.script.handler.NullScriptHandler;
 import org.ngrinder.script.handler.ProcessingResultPrintStream;
 import org.ngrinder.script.handler.ScriptHandler;
@@ -154,7 +155,7 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 		}else if ("SX".equals(queryFilter)) {
 			spec = spec.and(typeEqual(Type.TEMPLATE));
 		}
-		// and (name like '%${query}%' or description like '%${query}%')
+		// and (name like '%{query}%' or description like '%{query}%')
 		if (StringUtils.isNotBlank(query)) {
 			spec = spec.and(likeTestNameOrDescription(query));
 		}
@@ -229,7 +230,7 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 		if (statuses.length == 0) {
 			return 0;
 		} else {
-			// and status in ${statuses}
+			// and status in {statuses}
 			return perfTestRepository.count(spec.and(statusSetEqual(statuses)));
 		}
 
@@ -249,7 +250,7 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 		if (user.getRole().equals(Role.GENERAL_USER)) {
 			spec = spec.and(createdBy(user));
 		}
-		// and id in ${ids}
+		// and id in {ids}
 		spec = spec.and(idSetEqual(ids));
 		return perfTestRepository.findAll(spec);
 	}
@@ -416,7 +417,7 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 		// 附加revision字段
 		attachFileRevision(user, perfTest);
 		// 附加type字段
-		attachType(user, perfTest);
+		attachType(perfTest);
 		// 附加tagString、tags字段
 		attachTags(user, perfTest, perfTest.getTagString());
 		return save(perfTest);
@@ -456,21 +457,12 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	}
 
 	/**
-	 * 设置type字段，【特定用户】的前台操作type=1（模板），后台定时任务type=2（后台定时任务），其他用户type=0
-	 * TODO: 目前特定用户限制为admin，后续考虑使用user.getRole().hasPermission(Permission.MANAGE_SCHEDULED_TASK)，方案待定
+	 * 设置type字段，【特定用户】可以前台修改为type=1（模板），后台定时任务默认type=2（后台定时任务），为空时type=0
 	 *
-	 * @param user          user
 	 * @param perfTest      perfTest
 	 */
-	private void attachType(User user, PerfTest perfTest) {
-		// 定时任务账号
-		if (ScheduleConstants.SCHEDULE_PROP_DEFAULT_USERID.equals(user.getUserId())) {
-			// null表示来源于页面操作，从定时任务来的则不为空
-			if (perfTest.getType() == null) {
-				perfTest.setType(Type.TEMPLATE);
-			}
-		} else {
-			// 其他账号
+	private void attachType(PerfTest perfTest) {
+		if (perfTest.getType() == null) {
 			perfTest.setType(Type.DEFAULT);
 		}
 	}
@@ -504,7 +496,16 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	}
 
 	/**
-	 * Delete test {@link PerfTest} by user and test id.
+	 * Delete {@link PerfTest} directory.
+	 *
+	 * @param perfTest perfTest
+	 */
+	private void deletePerfTestDirectory(PerfTest perfTest) {
+		FileUtils.deleteQuietly(config.getHome().getPerfTestDirectory(perfTest));
+	}
+
+	/**
+	 * 根据User和testId删除PerfTest
 	 *
 	 * @param user user
 	 * @param id   test id
@@ -526,7 +527,32 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	}
 
 	/**
-	 * Check if given user has a permission on perftest.
+	 * 删除给定用户的所有PerfTest和相关的tags，删除账号时调用
+	 * {@link UserService#delete(java.lang.String)}
+	 *
+	 * @param user user
+	 * @return deleted {@link PerfTest} list
+	 */
+	@Transactional
+	public List<PerfTest> deleteAll(User user) {
+		List<PerfTest> perfTestList = getAll(user);
+		for (PerfTest each : perfTestList) {
+			each.getTags().clear();
+		}
+		//先删除PerfTest和tag的关联关系
+		perfTestRepository.save(perfTestList);
+		perfTestRepository.flush();
+		//再删除PerfTest
+		perfTestRepository.delete(perfTestList);
+		perfTestRepository.flush();
+		//最后删除tags
+		tagService.deleteTags(user);
+		return perfTestList;
+	}
+
+
+	/**
+	 * 判断用户User是否对该测试PerfTest拥有某种权限Permission
 	 *
 	 * @param perfTest   perf test
 	 * @param user       user
@@ -536,28 +562,6 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	private boolean hasPermission(PerfTest perfTest, User user, Permission permission) {
 		return perfTest != null && (user.getRole().hasPermission(permission) || user.equals(perfTest.getCreatedUser()));
 	}
-
-	/**
-	 * Delete {@link PerfTest} directory.
-	 *
-	 * @param perfTest perfTest
-	 */
-	private void deletePerfTestDirectory(PerfTest perfTest) {
-		FileUtils.deleteQuietly(config.getHome().getPerfTestDirectory(perfTest));
-	}
-
-	/**
-	 * Get PerfTest directory in which {@link PerfTest} related files are saved.
-	 * for this class
-	 *
-	 * @param perfTest perfTest
-	 * @return directory
-	 */
-	@Override
-	public File getPerfTestDirectory(PerfTest perfTest) {
-		return config.getHome().getPerfTestDirectory(perfTest);
-	}
-
 
 	/**
 	 * 停止测试
@@ -585,37 +589,59 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	}
 
 	/**
-	 * 更新PERF_TEST表中的runningSample和agentState两个字段
+	 * 获取代理状态信息的JSON字符串格式，如果超长，超过的部分被截断
+	 * {@link PerfTestService#getProperSizedStatusString(net.grinder.SingleConsole)}
 	 *
-	 * @param id            id of {@link PerfTest}
-	 * @param runningSample runningSample json string
-	 * @param agentState    agentState json string
+	 * @param agentStatusMap agentStatusMap
 	 */
-	@Transactional
-	public void updateRuntimeStatistics(Long id, String runningSample, String agentState) {
-		perfTestRepository.updateRuntimeStatistics(id, runningSample, agentState);
-		perfTestRepository.flush();
+	String getProperSizedStatusString(Map<String, SystemDataModel> agentStatusMap) {
+		String json = gson.toJson(agentStatusMap);
+		int statusLength = StringUtils.length(json);
+		// 状态信息超长时截断处理（max column size is 10000）
+		if (statusLength > 9950) {
+			LOGGER.info("Agent status string length: {}, too long to save into table.", statusLength);
+			// 计算比率
+			double ratio = 9900.0 / statusLength;
+			// 选中的size
+			int pickSize = (int) (agentStatusMap.size() * ratio);
+			Map<String, SystemDataModel> pickAgentStateMap = Maps.newHashMap();
+			int pickIndex = 0;
+			for (Entry<String, SystemDataModel> each : agentStatusMap.entrySet()) {
+				// pickSize之外的部分被舍弃
+				if (pickIndex < pickSize) {
+					pickAgentStateMap.put(each.getKey(), each.getValue());
+					pickIndex++;
+				}
+			}
+			json = gson.toJson(pickAgentStateMap);
+			LOGGER.debug("Agent status string get {} outof {} agents, new size is {}.", new Object[]{pickSize, agentStatusMap.size(), json.length()});
+		}
+		return json;
 	}
 
-	/**
-	 * To save statistics data when test is running and put into cache after that. If the console is not available, it
-	 * returns null.
-	 *
-	 * @param singleConsole single console.
-	 * @param perfTestId    perfTest Id
-	 */
-	@Transactional
-	public void saveStatistics(SingleConsole singleConsole, Long perfTestId) {
-		String runningSample = getProperSizeRunningSample(singleConsole);
-		String agentState = getProperSizedStatusString(singleConsole);
-		updateRuntimeStatistics(perfTestId, runningSample, agentState);
-	}
 
 	/**
-	 * 从singleConsole获取runningSample
+	 * 从singleConsole获取代理状态信息的JSON字符串格式，如果超长，超过的部分被截断
+	 * Get the limited size of agent status json string.
+	 * {@link PerfTestService#saveStatistics(net.grinder.SingleConsole, java.lang.Long)}
 	 *
 	 * @param singleConsole
-	 * @return
+	 */
+	public String getProperSizedStatusString(SingleConsole singleConsole) {
+		Map<String, SystemDataModel> agentStatusMap = Maps.newHashMap();
+		final int singleConsolePort = singleConsole.getConsolePort();
+		// 从SingleConsole获取AgentStatusMap
+		for (AgentStatus each : agentManager.getAgentStatusSetConnectingToPort(singleConsolePort)) {
+			agentStatusMap.put(each.getAgentName(), each.getSystemDataModel());
+		}
+		return getProperSizedStatusString(agentStatusMap);
+	}
+
+	/**
+	 * 从singleConsole获取运行采样信息的字符串格式，超长部分会被截断
+	 * {@link PerfTestService#saveStatistics(net.grinder.SingleConsole, java.lang.Long)}
+	 *
+	 * @param singleConsole singleConsole
 	 */
 	private String getProperSizeRunningSample(SingleConsole singleConsole) {
 		Map<String, Object> statisticData = singleConsole.getStatisticsData();
@@ -625,8 +651,7 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 			Map<String, Object> tempData = newHashMap();
 			for (Entry<String, Object> each : statisticData.entrySet()) {
 				String key = each.getKey();
-				if (key.equals("totalStatistics") || key.equals("cumulativeStatistics")
-					|| key.equals("lastSampleStatistics")) {
+				if ("totalStatistics".equals(key) || "cumulativeStatistics".equals(key) || "lastSampleStatistics".equals(key)) {
 					continue;
 				}
 				tempData.put(key, each.getValue());
@@ -637,51 +662,37 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	}
 
 	/**
-	 * Get the limited size of agent status json string.
-	 * 从singleConsole获取runningSample
+	 * 更新PERF_TEST表中的runningSample和agentState两个字段
+	 * {@link PerfTestService#saveStatistics(net.grinder.SingleConsole, java.lang.Long)}
 	 *
-	 * @param singleConsole
-	 * @return
+	 * @param id            id of {@link PerfTest}
+	 * @param runningSample runningSample json string
+	 * @param agentState    agentState json string
 	 */
-	public String getProperSizedStatusString(SingleConsole singleConsole) {
-		Map<String, SystemDataModel> agentStatusMap = Maps.newHashMap();
-		final int singleConsolePort = singleConsole.getConsolePort();
-		for (AgentStatus each : agentManager.getAgentStatusSetConnectingToPort(singleConsolePort)) {
-			agentStatusMap.put(each.getAgentName(), each.getSystemDataModel());
-		}
-		return getProperSizedStatusString(agentStatusMap);
+	@Transactional(rollbackFor = Exception.class)
+	public void updateRuntimeStatistics(Long id, String runningSample, String agentState) {
+		perfTestRepository.updateRuntimeStatistics(id, runningSample, agentState);
+		perfTestRepository.flush();
 	}
 
 	/**
-	 * @param agentStatusMap
-	 * @return
+	 * 从控制台获取runningSample和agentState两个信息，并存到数据库中。
+	 * To save statistics data when test is running and put into cache after that. If the console is not available, it returns null.
+	 * {@link PerfTestSamplingCollectorListener#PerfTestSamplingCollectorListener(net.grinder.SingleConsole, java.lang.Long, org.ngrinder.perftest.service.PerfTestService, org.ngrinder.infra.schedule.ScheduledTaskService)}
+	 *
+	 * @param singleConsole single console.
+	 * @param perfTestId    perfTest Id
 	 */
-	String getProperSizedStatusString(Map<String, SystemDataModel> agentStatusMap) {
-		String json = gson.toJson(agentStatusMap);
-		int statusLength = StringUtils.length(json);
-		// max column size is 10000
-		if (statusLength > 9950) {
-			LOGGER.info("Agent status string length: {}, too long to save into table.", statusLength);
-			double ratio = 9900.0 / statusLength;
-			int pickSize = (int) (agentStatusMap.size() * ratio);
-			Map<String, SystemDataModel> pickAgentStateMap = Maps.newHashMap();
-
-			int pickIndex = 0;
-			for (Entry<String, SystemDataModel> each : agentStatusMap.entrySet()) {
-				if (pickIndex < pickSize) {
-					pickAgentStateMap.put(each.getKey(), each.getValue());
-					pickIndex++;
-				}
-			}
-			json = gson.toJson(pickAgentStateMap);
-			LOGGER.debug("Agent status string get {} outof {} agents, new size is {}.", new Object[]{pickSize,
-				agentStatusMap.size(), json.length()});
-		}
-		return json;
+	@Transactional(rollbackFor = Exception.class)
+	public void saveStatistics(SingleConsole singleConsole, Long perfTestId) {
+		String runningSample = getProperSizeRunningSample(singleConsole);
+		String agentState = getProperSizedStatusString(singleConsole);
+		updateRuntimeStatistics(perfTestId, runningSample, agentState);
 	}
 
 	/**
 	 * 更新PERF_TEST表中type字段
+	 * {@link PerfTestController#updateType(org.ngrinder.model.User, java.lang.String, java.lang.String)}
 	 *
 	 * @param perfTest perftest to mark
 	 * @param type     type
@@ -785,8 +796,16 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 
 	}
 
+	/**
+	 * 获取安全的Double值
+	 * @param map
+	 * @param key
+	 * @param defaultValue
+	 * @return
+	 */
 	double parseDoubleWithSafety(Map<?, ?> map, Object key, Double defaultValue) {
 		Double doubleValue = MapUtils.getDouble(map, key, defaultValue);
+		// Math.round 四舍五入取整
 		return Math.round(doubleValue * 100D) / 100D;
 	}
 
@@ -817,7 +836,7 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	}
 
 	/**
-	 * 获取分发目录
+	 * 获取分发目录，一般是{NGRINDER_HOME}/perftest/{test_id}/dist
 	 * {@link PerfTestRunnable#distributeFileOn(org.ngrinder.model.PerfTest, net.grinder.SingleConsole)}
 	 * {@link PerfTestService#getCustomClassPath(org.ngrinder.model.PerfTest)}
 	 * {@link PerfTestService#createConsoleProperties(org.ngrinder.model.PerfTest)}
@@ -832,7 +851,7 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	}
 
 	/**
-	 * Get the process and thread policy java script.
+	 * 获取进程线程策略文件，一般是{NGRINDER_HOME}/process_and_thread_policy.js
 	 * {@link PerfTestController#getOne(org.ngrinder.model.User, java.lang.Long, org.springframework.ui.ModelMap)}
 	 * {@link org.ngrinder.perftest.controller.PerfTestController#getQuickStart(org.ngrinder.model.User, java.lang.String, java.lang.String, org.springframework.ui.ModelMap)}
 	 * {@link PerfTestService#calcProcessCountAndThreadCount(int)}
@@ -844,42 +863,35 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	}
 
 	/**
-	 * Create {@link GrinderProperties} based on the passed {@link PerfTest}.
-	 *
-	 * @param perfTest base data
-	 * @return created {@link GrinderProperties} instance
-	 */
-	public GrinderProperties getGrinderProperties(PerfTest perfTest) {
-		return getGrinderProperties(perfTest, new NullScriptHandler());
-	}
-
-	/**
-	 * Create {@link GrinderProperties} based on the passed {@link PerfTest}.
+	 * 创建grinder.properties配置
 	 * {@link PerfTestRunnable#doTest(org.ngrinder.model.PerfTest)}
 	 * {@link PerfTestService#getGrinderProperties(org.ngrinder.model.PerfTest)}
 	 *
 	 * @param perfTest      base data
-	 * @param scriptHandler scriptHandler
+	 * @param scriptHandler scriptHandler 只在设置grinder.properties中的grinder.script时用到
 	 * @return created {@link GrinderProperties} instance
 	 */
 	public GrinderProperties getGrinderProperties(PerfTest perfTest, ScriptHandler scriptHandler) {
 		try {
-			// Use default properties first
+			// 首先使用默认配置，一般是{NGRINDER_HOME}/grinder.properties
 			GrinderProperties grinderProperties = new GrinderProperties(config.getHome().getDefaultGrinderProperties());
 
 			User user = perfTest.getCreatedUser();
 
 			// Get all files in the script path
 			String scriptName = perfTest.getScriptName();
-			FileEntry userDefinedGrinderProperties = fileEntryService.getOne(user,
-					FilenameUtils.concat(FilenameUtils.getPath(scriptName), DEFAULT_GRINDER_PROPERTIES), -1L);
+			String grinderPropertiesFile = FilenameUtils.concat(FilenameUtils.getPath(scriptName), DEFAULT_GRINDER_PROPERTIES);
+			// 从SVN获取最新的grinder.properties配置
+			FileEntry userDefinedGrinderProperties = fileEntryService.getOne(user, grinderPropertiesFile, -1L);
 			if (!config.isSecurityEnabled() && userDefinedGrinderProperties != null) {
 				// Make the property overridden by user property.
 				GrinderProperties userProperties = new GrinderProperties();
 				userProperties.load(new StringReader(userDefinedGrinderProperties.getContent()));
 				grinderProperties.putAll(userProperties);
 			}
+			// 根据测试配置设置对应的属性
 			grinderProperties.setAssociatedFile(new File(DEFAULT_GRINDER_PROPERTIES));
+			// 入参scriptHandler只在这里有用到
 			grinderProperties.setProperty(GRINDER_PROP_SCRIPT, scriptHandler.getScriptExecutePath(scriptName));
 
 			grinderProperties.setProperty(GRINDER_PROP_TEST_ID, "test_" + perfTest.getId());
@@ -940,7 +952,17 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	}
 
 	/**
-	 * Build custom class path on the given {@link PerfTest}.
+	 * 创建grinder.properties配置
+	 *
+	 * @param perfTest base data
+	 * @return created {@link GrinderProperties} instance
+	 */
+	public GrinderProperties getGrinderProperties(PerfTest perfTest) {
+		return getGrinderProperties(perfTest, new NullScriptHandler());
+	}
+
+	/**
+	 * 构建Java的CLASSPATH，例如：.:lib:lib/xh-app-0.0.1-SNAPSHOT.jar:lib/gson-2.8.0.jar
 	 * {@link PerfTestService#getGrinderProperties(org.ngrinder.model.PerfTest, org.ngrinder.script.handler.ScriptHandler)}
 	 *
 	 * @param perfTest perftest
@@ -949,7 +971,9 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 
 	@SuppressWarnings("ResultOfMethodCallIgnored")
 	public String getCustomClassPath(PerfTest perfTest) {
+		// {NGRINDER_HOME}/perftest/{test_id}/dist
 		File perfTestDirectory = getDistributionPath(perfTest);
+		// {NGRINDER_HOME}/perftest/{test_id}/dist/lib
 		File libFolder = new File(perfTestDirectory, "lib");
 		final StringBuffer customClassPath = new StringBuffer();
 		customClassPath.append(".");
@@ -969,36 +993,18 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	}
 
 	/**
-	 * Get log file names for give test id.
-	 * {@link PerfTestController#downloadLog(org.ngrinder.model.User, long, java.lang.String, javax.servlet.http.HttpServletResponse)}
-	 * {@link PerfTestController#showLog(org.ngrinder.model.User, long, java.lang.String, javax.servlet.http.HttpServletResponse)}
+	 * 获取测试主目录，一般是{NGRINDER_HOME}/perftest/x_xxx/{test_id}
 	 *
-	 * @param testId   test id
-	 * @param fileName file name of one logs of the test
-	 * @return file report file path
+	 * @param perfTest perfTest
+	 * @return directory
 	 */
-	public File getLogFile(long testId, String fileName) {
-		return new File(getLogFileDirectory(String.valueOf(testId)), fileName);
+	@Override
+	public File getPerfTestDirectory(PerfTest perfTest) {
+		return config.getHome().getPerfTestDirectory(perfTest);
 	}
 
 	/**
-	 * Get log files list on the given test is.
-	 * {@link PerfTestController#getReportSection(org.ngrinder.model.User, org.springframework.ui.ModelMap, long, int)}
-	 * {@link PerfTestController#getLogs(org.ngrinder.model.User, java.lang.Long)}
-	 *
-	 * @param testId testId
-	 * @return logFilesList log file list of that test
-	 */
-	public List<String> getLogFiles(long testId) {
-		File logFileDirectory = getLogFileDirectory(String.valueOf(testId));
-		if (!logFileDirectory.exists() || !logFileDirectory.isDirectory()) {
-			return Collections.emptyList();
-		}
-		return Arrays.asList(logFileDirectory.list());
-	}
-
-	/**
-	 * Get report file directory for give test id.
+	 * 获取测试日志目录，一般是{NGRINDER_HOME}/perftest/x_xxx/{test_id}/logs
 	 * {@link PerfTestService#getLogFile(long, java.lang.String)}
 	 * {@link PerfTestService#getLogFiles(long)}
 	 *
@@ -1011,7 +1017,7 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	}
 
 	/**
-	 * Get report file directory for give test .
+	 * 根据perfTest获取测试报告目录，一般是{NGRINDER_HOME}/perftest/{test_id}/report
 	 * {@link PerfTestRunnable#doTest(org.ngrinder.model.PerfTest)}
 	 *
 	 * @param perfTest perftest
@@ -1019,6 +1025,70 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	 */
 	public File getReportFileDirectory(PerfTest perfTest) {
 		return config.getHome().getPerfTestReportDirectory(perfTest);
+	}
+
+	/**
+	 * 根据testId获取测试报告目录，一般是{NGRINDER_HOME}/perftest/{test_id}/report
+	 * {@link PerfTestService#getAvailableReportPlugins(java.lang.Long)}
+	 * {@link PerfTestService#getReportPluginDataFile(java.lang.Long, java.lang.String, java.lang.String)}
+	 *
+	 * @param testId testId
+	 * @return reportDir report file path
+	 */
+	private File getReportFileDirectory(long testId) {
+		return config.getHome().getPerfTestReportDirectory(String.valueOf(testId));
+	}
+
+	/**
+	 * 获取日志文件目录，{NGRINDER_HOME}/perftest/x_xxx/{test_id}/logs
+	 * {@link PerfTestService#prepareDistribution(org.ngrinder.model.PerfTest)}
+	 *
+	 * @param perfTest perfTest
+	 * @return logDir log file path of the test
+	 */
+	private File getLogFileDirectory(PerfTest perfTest) {
+		return config.getHome().getPerfTestLogDirectory(perfTest);
+	}
+
+	/**
+	 * 获取指定fileName的测试日志文件，一般是{NGRINDER_HOME}/perftest/x_xxx/{test_id}/logs/{fileName}
+	 * {@link PerfTestController#downloadLog(org.ngrinder.model.User, long, java.lang.String, javax.servlet.http.HttpServletResponse)}
+	 * {@link PerfTestController#showLog(org.ngrinder.model.User, long, java.lang.String, javax.servlet.http.HttpServletResponse)}
+	 *
+	 * @param testId   test id
+	 * @param fileName file name of one logs of the test
+	 * @return file report file path
+	 */
+	public File getLogFile(long testId, String fileName) {
+		return new File(getLogFileDirectory(String.valueOf(testId)), fileName);
+	}
+
+	/**
+	 * 获取测试目录下的所有日志文件，一般是{NGRINDER_HOME}/perftest/x_xxx/{test_id}/logs/*
+	 * {@link PerfTestController#getReportSection(org.ngrinder.model.User, org.springframework.ui.ModelMap, long, int)}
+	 * {@link PerfTestController#getLogs(org.ngrinder.model.User, java.lang.Long)}
+	 *
+	 * @param testId testId
+	 * @return logFilesList log file list of that test
+	 */
+	public List<String> getLogFiles(long testId) {
+		File logFileDirectory = getLogFileDirectory(String.valueOf(testId));
+		// 路径不存在或者非目录，返回空
+		if (!logFileDirectory.exists() || !logFileDirectory.isDirectory() || logFileDirectory.list() == null) {
+			return Collections.emptyList();
+		}
+		return Arrays.asList(logFileDirectory.list());
+	}
+
+	/**
+	 * 获取统计目录，{NGRINDER_HOME}/perftest/x_xxx/{test_id}/stat
+	 *
+	 * @param perfTest perftest
+	 * @return
+	 */
+	@Override
+	public File getStatisticPath(PerfTest perfTest) {
+		return config.getHome().getPerfTestStatisticPath(perfTest);
 	}
 
 	/**
@@ -1170,7 +1240,11 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 		CollectionUtils.filter(perfTests, new Predicate() {
 			@Override
 			public boolean evaluate(Object object) {
-				return (((PerfTest) object).getStopRequest() == Boolean.TRUE);
+				Boolean stopRequest = ((PerfTest) object).getStopRequest();
+				if(stopRequest != null && stopRequest.equals(Boolean.TRUE)){
+					return true;
+				}
+				return false;
 			}
 		});
 		return perfTests;
@@ -1182,7 +1256,7 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	 *
 	 */
 	@Override
-	@Transactional
+	@Transactional(rollbackFor = Exception.class)
 	public void addCommentOn(User user, Long testId, String testComment, String tagString) {
 		PerfTest perfTest = getOne(user, testId);
 		perfTest.setTestComment(testComment);
@@ -1389,7 +1463,8 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	}
 
 	/**
-	 * Get available report plugins list for the given test.
+	 * 根据testId获取可用插件的报告
+	 * 返回内容为List<Pair<String, String>>，第一个String是plugin名字（目录名），第二个String是kind名字（目录下的data文件名）
 	 * {@link PerfTestController#getReport(org.springframework.ui.ModelMap, long)}
 	 *
 	 * @param testId test id
@@ -1400,6 +1475,7 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 		File reportDir = getReportFileDirectory(testId);
 		if (reportDir.exists()) {
 			for (File plugin : checkNotNull(reportDir.listFiles())) {
+				// 判断report目录下是否存在子目录？也就是说只要有子目录，这个子目录名称就是插件名，里面的data文件就是kind文件
 				if (plugin.isDirectory()) {
 					for (String kind : checkNotNull(plugin.list())) {
 						if (kind.endsWith(".data")) {
@@ -1412,19 +1488,9 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 		return result;
 	}
 
-	/**
-	 * Get report file directory for give test id .
-	 * {@link PerfTestService#getAvailableReportPlugins(java.lang.Long)}
-	 * {@link PerfTestService#getReportPluginDataFile(java.lang.Long, java.lang.String, java.lang.String)}
-	 *
-	 * @param testId testId
-	 * @return reportDir report file path
-	 */
-	private File getReportFileDirectory(long testId) {
-		return config.getHome().getPerfTestReportDirectory(String.valueOf(testId));
-	}
 
 	/**
+	 * 获取插件报告图的间隔
 	 * Get interval value of the monitor data of a plugin, like jvm monitor plugin.
 	 * The usage of interval value is same as system monitor data.
 	 * {@link PerfTestController#getReportPluginGraphData(long, java.lang.String, java.lang.String, int)}
@@ -1440,10 +1506,10 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	}
 
 	/**
+	 * 根据图片宽度和数据文件，获取间隔，以保证绘图展示美观
 	 * Get the interval value. In the normal, the image width is 700, and if the data count is too big,
-	 * there will be too many points in the chart. So we will calculate the interval to get appropriate count of data to
+	 * there will be too many points in the chart. So we will calculate the interval to get appropriate(适当的) count of data to
 	 * display. For example, interval value "2" means, get one record for every "2" records.
-	 * for this class
 	 * {@link PerfTestService#getReportPluginGraphInterval(long, java.lang.String, java.lang.String, int)}
 	 *
 	 * @param imageWidth
@@ -1451,6 +1517,7 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	 * @return
 	 */
 	private int getRecordInterval(int imageWidth, File dataFile) {
+		// 折线图点数
 		int pointCount = Math.max(imageWidth, MAX_POINT_COUNT);
 		FileInputStream in = null;
 		InputStreamReader isr = null;
@@ -1461,6 +1528,7 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 			isr = new InputStreamReader(in);
 			lnr = new LineNumberReader(isr);
 			lnr.skip(dataFile.length());
+			// 计算间隔
 			interval = Math.max((lnr.getLineNumber() + 1) / pointCount, 1);
 		} catch (FileNotFoundException e) {
 			LOGGER.error("data file not exist:{}", dataFile);
@@ -1477,13 +1545,16 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	}
 
 	/**
-	 * Plugin monitor data should be {TestReportDir}/{plugin}/{kind}.data
+	 * 获取插件监控数据文件
 	 * {@link PerfTestService#getReportPluginGraphInterval(long, java.lang.String, java.lang.String, int)}
 	 * {@link PerfTestService#getReportPluginGraph(long, java.lang.String, java.lang.String, int)}
 	 */
 	private File getReportPluginDataFile(Long testId, String plugin, String kind) {
+		// {NGRINDER_HOME}/perftest/{test_id}/report
 		File reportDir = getReportFileDirectory(testId);
+		// {NGRINDER_HOME}/perftest/{test_id}/report/{plugin}
 		File pluginDir = new File(reportDir, plugin);
+		// {NGRINDER_HOME}/perftest/{test_id}/report/{plugin}/{kind}.data
 		return new File(pluginDir, kind + ".data");
 	}
 
@@ -1501,8 +1572,9 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	 */
 	public Map<String, Object> getReportPluginGraph(long testId, String plugin, String kind, int interval) {
 		Map<String, Object> returnMap = Maps.newHashMap();
-		// ${NGRINDER_HOME}/perftest/${test_id}/report/${plugin}/${kind}.data
+		// 获取文件{NGRINDER_HOME}/perftest/{test_id}/report/{plugin}/{kind}.data
 		File pluginDataFile = getReportPluginDataFile(testId, plugin, kind);
+		// 下面是读取文件
 		BufferedReader br = null;
 		try {
 			br = new BufferedReader(new FileReader(pluginDataFile));
@@ -1511,7 +1583,7 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 			StringBuilder headerSB = new StringBuilder("[");
 			String[] headers = StringUtils.split(header, ",");
 			String[] refinedHeaders = StringUtils.split(header, ",");
-			List<StringBuilder> dataStringBuilders = new ArrayList<StringBuilder>(headers.length);
+			List<StringBuilder> dataStringBuilders = new ArrayList<>(headers.length);
 
 			for (int i = 0; i < headers.length; i++) {
 				dataStringBuilders.add(new StringBuilder("["));
@@ -1559,7 +1631,7 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	}
 
 	/**
-	 * 根据给定的report key获取一个报告文件，比如${NGRINDER_HOME}/perftest/{test_id}/report/TPS.data、${NGRINDER_HOME}/perftest/{test_id}/report/Errors.data
+	 * 根据给定的report key获取一个报告文件，比如{NGRINDER_HOME}/perftest/{test_id}/report/TPS.data、{NGRINDER_HOME}/perftest/{test_id}/report/Errors.data
 	 * {@link PerfTestService#getSingleReportDataAsJson(long, java.lang.String, int)}
 	 * {@link PerfTestService#getReportData(long, java.lang.String, boolean, int)}
 	 *
@@ -1573,7 +1645,7 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	}
 
 	/**
-	 * 根据给定的report key获取多个报告文件，比如${NGRINDER_HOME}/perftest/{test_id}/report/TPS-1.data、${NGRINDER_HOME}/perftest/{test_id}/report/Errors-2.data
+	 * 根据给定的report key获取多个报告文件，比如{NGRINDER_HOME}/perftest/{test_id}/report/TPS-1.data、{NGRINDER_HOME}/perftest/{test_id}/report/Errors-2.data
 	 * {@link PerfTestService#getReportData(long, java.lang.String, boolean, int)}
 	 *
 	 * @param testId test id
@@ -1642,7 +1714,7 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	}
 
 	/**
-	 * Get json string that contains test report data as a json string.
+	 * 根据给定的report key获取一个报告文件，然后获取该文件的JSON字符串格式。（该方法是两个方法简单的组合）
 	 * {@link PerfTestController#getReportSection(org.ngrinder.model.User, org.springframework.ui.ModelMap, long, int)}
 	 *
 	 * @param testId   test id
@@ -1685,7 +1757,7 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	}
 
 	/**
-	 * 构建报告名称，文件存储在${NGRINDER_HOME}/perftest/{test_id}/report目录下，报告名TPS.data、Peak_TPS.data、Tests.data等
+	 * 构建报告名称，文件存储在{NGRINDER_HOME}/perftest/{test_id}/report目录下，报告名TPS.data、Peak_TPS.data、Tests.data等
 	 * {@link PerfTestService#getReportData(long, java.lang.String, boolean, int)}
 	 *
 	 * @param key
@@ -1711,7 +1783,7 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	}
 
 	/**
-	 * 准备分发的文件，文件存储在${NGRINDER_HOME}/perftest/{test_id}/dist目录下
+	 * 准备分发的文件，文件存储在{NGRINDER_HOME}/perftest/{test_id}/dist目录下
 	 * {@link PerfTestRunnable#doTest(org.ngrinder.model.PerfTest)}
 	 *
 	 * @param perfTest perfTest
@@ -1724,13 +1796,13 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 		Long scriptRevision = getSafe(perfTest.getScriptRevision());
 		FileEntry tmpScriptEntry = fileEntryService.getOne(user, scriptName, scriptRevision);
 		FileEntry scriptEntry = checkNotNull(tmpScriptEntry, "script should exist");
-		// 获取分发目录，${NGRINDER_HOME}/perftest/x_xxx/${test_id}/dist，示例：/Users/ziling/.ngrinder/perftest/0_999/180/dist
+		// 获取分发目录，{NGRINDER_HOME}/perftest/x_xxx/{test_id}/dist，示例：/Users/ziling/.ngrinder/perftest/0_999/180/dist
 		File perfTestDistDirectory = getDistributionPath(perfTest);
 		//
 		ProcessingResultPrintStream processingResult = new ProcessingResultPrintStream(new ByteArrayOutputStream());
 		// 获取脚本目录下的所有文件
 		ScriptHandler handler = scriptHandlerFactory.getHandler(scriptEntry);
-		// 拷贝SVN上脚本相关文件（整个脚本工程）到${NGRINDER_HOME}/perftest/x_xxx/testId/dist目录
+		// 拷贝SVN上脚本相关文件（整个脚本工程）到{NGRINDER_HOME}/perftest/x_xxx/testId/dist目录
 		handler.prepareDist(perfTest.getId(), user, scriptEntry, perfTestDistDirectory, config.getControllerProperties(), processingResult);
 		LOGGER.info("File write is completed in {}", perfTestDistDirectory);
 		// 分发文件不成功则记录日志文件
@@ -1747,28 +1819,6 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	}
 
 	/**
-	 * 获取日志文件目录，${NGRINDER_HOME}/perftest/x_xxx/${test_id}/logs
-	 * {@link PerfTestService#prepareDistribution(org.ngrinder.model.PerfTest)}
-	 *
-	 * @param perfTest perfTest
-	 * @return logDir log file path of the test
-	 */
-	private File getLogFileDirectory(PerfTest perfTest) {
-		return config.getHome().getPerfTestLogDirectory(perfTest);
-	}
-
-	/**
-	 * 获取统计目录，${NGRINDER_HOME}/perftest/x_xxx/${test_id}/stat
-	 *
-	 * @param perfTest perftest
-	 * @return
-	 */
-	@Override
-	public File getStatisticPath(PerfTest perfTest) {
-		return config.getHome().getPerfTestStatisticPath(perfTest);
-	}
-
-	/**
 	 * 获取配置中允许的最大同时运行测试个数，key=controller.max_concurrent_test
 	 * {@link PerfTestService#canExecuteTestMore()}
 	 * {@link PerfTestRunnable#canExecuteMore( }
@@ -1777,30 +1827,6 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	 */
 	int getMaximumConcurrentTestCount() {
 		return config.getControllerProperties().getPropertyInt(PROP_CONTROLLER_MAX_CONCURRENT_TEST);
-	}
-
-	/**
-	 * 删除给定用户的所有PerfTest和相关的tags，删除账号时调用
-	 * {@link UserService#delete(java.lang.String)}
-	 *
-	 * @param user user
-	 * @return deleted {@link PerfTest} list
-	 */
-	@Transactional
-	public List<PerfTest> deleteAll(User user) {
-		List<PerfTest> perfTestList = getAll(user);
-		for (PerfTest each : perfTestList) {
-			each.getTags().clear();
-		}
-		//先删除PerfTest和tag的关联关系
-		perfTestRepository.save(perfTestList);
-		perfTestRepository.flush();
-		//再删除PerfTest
-		perfTestRepository.delete(perfTestList);
-		perfTestRepository.flush();
-		//最后删除tags
-		tagService.deleteTags(user);
-		return perfTestList;
 	}
 
 	/**

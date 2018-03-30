@@ -1,5 +1,11 @@
 package org.ngrinder.common.constant;
 
+/**
+ * Schedule Constants.
+ *
+ * @author ziling
+ * @since 3.3
+ */
 public interface ScheduleConstants {
 	public static final String SCHEDULE_PROP_DEFAULT_USERID = "admin";
 	public static final String SCHEDULE_PROP_CLOSE = "schedule.close";

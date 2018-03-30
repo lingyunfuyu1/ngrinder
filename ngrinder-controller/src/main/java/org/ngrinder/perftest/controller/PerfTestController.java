@@ -964,27 +964,6 @@ public class PerfTestController extends BaseController {
 	}
 
 	/**
-	 * Mark the given perf test as a template.
-	 *
-	 * @param user user
-	 * @param id   perf test id
-	 * @return json success message if succeeded
-	 */
-	@RestAPI
-	@RequestMapping(value = "/api/mark_template/{id}", method = RequestMethod.PUT)
-	public HttpEntity<String> markPerfTestTemplate(User user, @PathVariable("id") Long id) {
-		PerfTest perfTest = getOneWithPermissionCheck(user, id, false);
-		checkNotNull(perfTest, "no perftest for %s exits", id);
-		if (user.getRole().hasPermission(Permission.MANAGE_SCHEDULED_TASK)) {
-			perfTestService.updateType(perfTest, Type.TEMPLATE);
-			return successJsonHttpEntity();
-		} else {
-			return errorJsonHttpEntity();
-		}
-	}
-
-
-	/**
 	 * Update the given perf test.
 	 *
 	 * @param user     user
