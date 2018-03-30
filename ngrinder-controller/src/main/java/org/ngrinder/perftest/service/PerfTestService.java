@@ -863,6 +863,42 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	}
 
 	/**
+	 * 准备分发的文件，文件存储在{NGRINDER_HOME}/perftest/{test_id}/dist目录下
+	 * {@link PerfTestRunnable#doTest(org.ngrinder.model.PerfTest)}
+	 *
+	 * @param perfTest perfTest
+	 * @return File location in which the perftest script and resources are distributed.
+	 */
+	public ScriptHandler prepareDistribution(PerfTest perfTest) {
+		User user = perfTest.getCreatedUser();
+		// 从SVN服务器上获取scriptEntry
+		String scriptName = checkNotEmpty(perfTest.getScriptName(), "perfTest should have script name");
+		Long scriptRevision = getSafe(perfTest.getScriptRevision());
+		FileEntry tmpScriptEntry = fileEntryService.getOne(user, scriptName, scriptRevision);
+		FileEntry scriptEntry = checkNotNull(tmpScriptEntry, "script should exist");
+		// 获取分发目录，{NGRINDER_HOME}/perftest/x_xxx/{test_id}/dist，示例：/Users/ziling/.ngrinder/perftest/0_999/180/dist
+		File perfTestDistDirectory = getDistributionPath(perfTest);
+		//
+		ProcessingResultPrintStream processingResult = new ProcessingResultPrintStream(new ByteArrayOutputStream());
+		// 获取脚本目录下的所有文件
+		ScriptHandler handler = scriptHandlerFactory.getHandler(scriptEntry);
+		// 拷贝SVN上脚本相关文件（整个脚本工程）到{NGRINDER_HOME}/perftest/x_xxx/testId/dist目录
+		handler.prepareDist(perfTest.getId(), user, scriptEntry, perfTestDistDirectory, config.getControllerProperties(), processingResult);
+		LOGGER.info("File write is completed in {}", perfTestDistDirectory);
+		// 分发文件不成功则记录日志文件
+		if (!processingResult.isSuccess()) {
+			File logDir = new File(getLogFileDirectory(perfTest), "distribution_log.txt");
+			try {
+				FileUtils.writeByteArrayToFile(logDir, processingResult.getLogByteArray());
+			} catch (IOException e) {
+				noOp();
+			}
+			throw processException("Error while file distribution is prepared.");
+		}
+		return handler;
+	}
+
+	/**
 	 * 创建grinder.properties配置
 	 * {@link PerfTestRunnable#doTest(org.ngrinder.model.PerfTest)}
 	 * {@link PerfTestService#getGrinderProperties(org.ngrinder.model.PerfTest)}
@@ -1463,6 +1499,158 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	}
 
 	/**
+	 * 根据给定的report key获取一个报告文件，比如{NGRINDER_HOME}/perftest/{test_id}/report/TPS.data、{NGRINDER_HOME}/perftest/{test_id}/report/Errors.data
+	 * {@link PerfTestService#getSingleReportDataAsJson(long, java.lang.String, int)}
+	 * {@link PerfTestService#getReportData(long, java.lang.String, boolean, int)}
+	 *
+	 * @param testId test id
+	 * @param key    key
+	 * @return return file
+	 */
+	public File getReportDataFile(long testId, String key) {
+		File reportFolder = config.getHome().getPerfTestReportDirectory(String.valueOf(testId));
+		return new File(reportFolder, key + ".data");
+	}
+
+	/**
+	 * 根据给定的report key获取多个报告文件，比如{NGRINDER_HOME}/perftest/{test_id}/report/TPS-1.data、{NGRINDER_HOME}/perftest/{test_id}/report/Errors-2.data
+	 * {@link PerfTestService#getReportData(long, java.lang.String, boolean, int)}
+	 *
+	 * @param testId test id
+	 * @param key    report key
+	 * @return return file list
+	 */
+	public List<File> getReportDataFiles(long testId, String key) {
+		File reportFolder = config.getHome().getPerfTestReportDirectory(String.valueOf(testId));
+		String wildcard = key + "*.data";
+		FileFilter fileFilter = new WildcardFileFilter(wildcard);
+		File[] files = reportFolder.listFiles(fileFilter);
+		Arrays.sort(files, new Comparator<File>() {
+			@Override
+			public int compare(File o1, File o2) {
+				return FilenameUtils.getBaseName(o1.getName()).compareTo(FilenameUtils.getBaseName(o2.getName()));
+			}
+		});
+		return Arrays.asList(files);
+	}
+
+	/**
+	 * 根据给定的report key获取一个报告文件，然后获取该文件的JSON字符串格式。（该方法是两个方法简单的组合）
+	 * {@link PerfTestController#getReportSection(org.ngrinder.model.User, org.springframework.ui.ModelMap, long, int)}
+	 *
+	 * @param testId   test id
+	 * @param key      key
+	 * @param interval interval to collect data
+	 * @return json list
+	 */
+	public String getSingleReportDataAsJson(long testId, String key, int interval) {
+		File reportDataFile = getReportDataFile(testId, key);
+		return getFileDataAsJson(reportDataFile, interval);
+	}
+
+	/**
+	 * 读取文件内容，返回字符串，格式为首尾中括号，中间每行内容以逗号隔开， "[" + 第一行 + "," + 第二行 + "," + ... + 最后一行 + "]"
+	 * {@link PerfTestService#getSingleReportDataAsJson(long, java.lang.String, int)}
+	 * {@link PerfTestService#getReportData(long, java.lang.String, boolean, int)}
+	 *
+	 * @param targetFile target file
+	 * @param interval   interval to collect data
+	 * @return json string
+	 */
+	public String getFileDataAsJson(File targetFile, int interval) {
+		if (!targetFile.exists()) {
+			return "[]";
+		}
+		StringBuilder reportData = new StringBuilder("[");
+		FileReader reader = null;
+		BufferedReader br = null;
+		try {
+			reader = new FileReader(targetFile);
+			br = new BufferedReader(reader);
+			String data = br.readLine();
+			int current = 0;
+			// TODO：这里判空，遇到空白行会中断
+			while (StringUtils.isNotBlank(data)) {
+				if (0 == current) {
+					reportData.append(data);
+					reportData.append(",");
+				}
+				// 控制每几行取一次数据，比如interval，那么只取1、4、7、...行的内容
+				if (++current >= interval) {
+					current = 0;
+				}
+				data = br.readLine();
+			}
+			// 倒数最后1个字符如果是逗号，则删除。charAt：获取指定索引处的字符
+			if (reportData.charAt(reportData.length() - 1) == ',') {
+				reportData.deleteCharAt(reportData.length() - 1);
+			}
+		} catch (IOException e) {
+			LOGGER.error("Report data retrieval is failed: {}", e.getMessage());
+			LOGGER.debug("Trace is : ", e);
+		} finally {
+			IOUtils.closeQuietly(reader);
+			IOUtils.closeQuietly(br);
+		}
+		return reportData.append("]").toString();
+	}
+
+	/**
+	 * 根据testId和key获取报告，存在Pair中（第一个元素是报告名列表，第二个元素是报告内容列表）
+	 * {@link PerfTestController#getPerfGraphData(java.lang.Long, java.lang.String[], boolean, int)}
+	 *
+	 * @param testId    test id
+	 * @param key       report key
+	 * @param onlyTotal 。
+	 * @param interval  interval to collect data
+	 * @return list containing label and tps value list
+	 */
+	public Pair<ArrayList<String>, ArrayList<String>> getReportData(long testId, String key, boolean onlyTotal, int interval) {
+		Pair<ArrayList<String>, ArrayList<String>> resultPair = Pair.of(new ArrayList<String>(), new ArrayList<String>());
+		// 设置为true，只取单个报告（也就是总的报告）；否则，取所有的报告（多个子报告文件）
+		List<File> reportDataFiles = onlyTotal ? Lists.newArrayList(getReportDataFile(testId, key)) : getReportDataFiles(testId, key);
+		for (File file : reportDataFiles) {
+			String buildReportName = buildReportName(key, file);
+			if (key.equals(buildReportName)) {
+				buildReportName = "Total";
+			} else {
+				buildReportName = buildReportName.replace("_", " ");
+			}
+			// resultPair的第一个元素，类型是一个列表，每个元素都是String
+			resultPair.getFirst().add(buildReportName);
+			// resultPair的第二个元素，类型是一个列表，每个元素都是String（json格式的String），与第一个元素对应
+			resultPair.getSecond().add(getFileDataAsJson(file, interval));
+		}
+		return resultPair;
+	}
+
+	/**
+	 * 构建报告名称，文件存储在{NGRINDER_HOME}/perftest/{test_id}/report目录下，报告名TPS.data、Peak_TPS.data、Tests.data等
+	 * {@link PerfTestService#getReportData(long, java.lang.String, boolean, int)}
+	 *
+	 * @param key
+	 * @param file
+	 * @return
+	 */
+	public String buildReportName(String key, File file) {
+		// 移除后缀名：foo.txt-->foo；a/b/c.jpg-->a/b/c；a/b/c-->a/b/c；a.b/c-->a.b/c
+		String reportName = FilenameUtils.removeExtension(file.getName());
+		if (key.equals(reportName)) {
+			return reportName;
+		}
+		int splitCount = 2;
+		// 以中划线-为分割符分割字符串，至多分成2份。 比如：StringUtils.split("ab-cd-ef", "-", 2) = ["ab", "cd-ef"]
+		String[] baseName = StringUtils.split(reportName, "-", splitCount);
+		// 如果reportName可以分成2份，且第一份包含在INTERESTING_PER_TEST_STATISTICS中，则reportName等于第二份;
+		if (baseName.length == splitCount) {
+			if (SingleConsole.INTERESTING_PER_TEST_STATISTICS.contains(baseName[0])) {
+				reportName = baseName[1];
+			}
+		}
+		return reportName;
+	}
+
+	/**
 	 * 根据testId获取可用插件的报告
 	 * 返回内容为List<Pair<String, String>>，第一个String是plugin名字（目录名），第二个String是kind名字（目录下的data文件名）
 	 * {@link PerfTestController#getReport(org.springframework.ui.ModelMap, long)}
@@ -1488,6 +1676,19 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 		return result;
 	}
 
+	/**
+	 * 获取插件监控数据文件
+	 * {@link PerfTestService#getReportPluginGraphInterval(long, java.lang.String, java.lang.String, int)}
+	 * {@link PerfTestService#getReportPluginGraph(long, java.lang.String, java.lang.String, int)}
+	 */
+	private File getReportPluginDataFile(Long testId, String plugin, String kind) {
+		// {NGRINDER_HOME}/perftest/{test_id}/report
+		File reportDir = getReportFileDirectory(testId);
+		// {NGRINDER_HOME}/perftest/{test_id}/report/{plugin}
+		File pluginDir = new File(reportDir, plugin);
+		// {NGRINDER_HOME}/perftest/{test_id}/report/{plugin}/{kind}.data
+		return new File(pluginDir, kind + ".data");
+	}
 
 	/**
 	 * 获取插件报告图的间隔
@@ -1542,20 +1743,6 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 			IOUtils.closeQuietly(in);
 		}
 		return interval;
-	}
-
-	/**
-	 * 获取插件监控数据文件
-	 * {@link PerfTestService#getReportPluginGraphInterval(long, java.lang.String, java.lang.String, int)}
-	 * {@link PerfTestService#getReportPluginGraph(long, java.lang.String, java.lang.String, int)}
-	 */
-	private File getReportPluginDataFile(Long testId, String plugin, String kind) {
-		// {NGRINDER_HOME}/perftest/{test_id}/report
-		File reportDir = getReportFileDirectory(testId);
-		// {NGRINDER_HOME}/perftest/{test_id}/report/{plugin}
-		File pluginDir = new File(reportDir, plugin);
-		// {NGRINDER_HOME}/perftest/{test_id}/report/{plugin}/{kind}.data
-		return new File(pluginDir, kind + ".data");
 	}
 
 	/**
@@ -1631,194 +1818,6 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	}
 
 	/**
-	 * 根据给定的report key获取一个报告文件，比如{NGRINDER_HOME}/perftest/{test_id}/report/TPS.data、{NGRINDER_HOME}/perftest/{test_id}/report/Errors.data
-	 * {@link PerfTestService#getSingleReportDataAsJson(long, java.lang.String, int)}
-	 * {@link PerfTestService#getReportData(long, java.lang.String, boolean, int)}
-	 *
-	 * @param testId test id
-	 * @param key    key
-	 * @return return file
-	 */
-	public File getReportDataFile(long testId, String key) {
-		File reportFolder = config.getHome().getPerfTestReportDirectory(String.valueOf(testId));
-		return new File(reportFolder, key + ".data");
-	}
-
-	/**
-	 * 根据给定的report key获取多个报告文件，比如{NGRINDER_HOME}/perftest/{test_id}/report/TPS-1.data、{NGRINDER_HOME}/perftest/{test_id}/report/Errors-2.data
-	 * {@link PerfTestService#getReportData(long, java.lang.String, boolean, int)}
-	 *
-	 * @param testId test id
-	 * @param key    report key
-	 * @return return file list
-	 */
-	public List<File> getReportDataFiles(long testId, String key) {
-		File reportFolder = config.getHome().getPerfTestReportDirectory(String.valueOf(testId));
-		String wildcard = key + "*.data";
-		FileFilter fileFilter = new WildcardFileFilter(wildcard);
-		File[] files = reportFolder.listFiles(fileFilter);
-		Arrays.sort(files, new Comparator<File>() {
-			@Override
-			public int compare(File o1, File o2) {
-				return FilenameUtils.getBaseName(o1.getName()).compareTo(FilenameUtils.getBaseName(o2.getName()));
-			}
-		});
-		return Arrays.asList(files);
-	}
-
-	/**
-	 * 读取文件内容，返回字符串，格式为首尾中括号，中间每行内容以逗号隔开， "[" + 第一行 + "," + 第二行 + "," + ... + 最后一行 + "]"
-	 * {@link PerfTestService#getSingleReportDataAsJson(long, java.lang.String, int)}
-	 * {@link PerfTestService#getReportData(long, java.lang.String, boolean, int)}
-	 *
-	 * @param targetFile target file
-	 * @param interval   interval to collect data
-	 * @return json string
-	 */
-	public String getFileDataAsJson(File targetFile, int interval) {
-		if (!targetFile.exists()) {
-			return "[]";
-		}
-		StringBuilder reportData = new StringBuilder("[");
-		FileReader reader = null;
-		BufferedReader br = null;
-		try {
-			reader = new FileReader(targetFile);
-			br = new BufferedReader(reader);
-			String data = br.readLine();
-			int current = 0;
-			// TODO：这里判空，遇到空白行会中断
-			while (StringUtils.isNotBlank(data)) {
-				if (0 == current) {
-					reportData.append(data);
-					reportData.append(",");
-				}
-				// 控制每几行取一次数据，比如interval，那么只取1、4、7、...行的内容
-				if (++current >= interval) {
-					current = 0;
-				}
-				data = br.readLine();
-			}
-			// 倒数最后1个字符如果是逗号，则删除。charAt：获取指定索引处的字符
-			if (reportData.charAt(reportData.length() - 1) == ',') {
-				reportData.deleteCharAt(reportData.length() - 1);
-			}
-		} catch (IOException e) {
-			LOGGER.error("Report data retrieval is failed: {}", e.getMessage());
-			LOGGER.debug("Trace is : ", e);
-		} finally {
-			IOUtils.closeQuietly(reader);
-			IOUtils.closeQuietly(br);
-		}
-		return reportData.append("]").toString();
-	}
-
-	/**
-	 * 根据给定的report key获取一个报告文件，然后获取该文件的JSON字符串格式。（该方法是两个方法简单的组合）
-	 * {@link PerfTestController#getReportSection(org.ngrinder.model.User, org.springframework.ui.ModelMap, long, int)}
-	 *
-	 * @param testId   test id
-	 * @param key      key
-	 * @param interval interval to collect data
-	 * @return json list
-	 */
-	public String getSingleReportDataAsJson(long testId, String key, int interval) {
-		File reportDataFile = getReportDataFile(testId, key);
-		return getFileDataAsJson(reportDataFile, interval);
-	}
-
-	/**
-	 * 根据testId和key获取报告，存在Pair中（第一个元素是报告名列表，第二个元素是报告内容列表）
-	 * {@link PerfTestController#getPerfGraphData(java.lang.Long, java.lang.String[], boolean, int)}
-	 *
-	 * @param testId    test id
-	 * @param key       report key
-	 * @param onlyTotal 。
-	 * @param interval  interval to collect data
-	 * @return list containing label and tps value list
-	 */
-	public Pair<ArrayList<String>, ArrayList<String>> getReportData(long testId, String key, boolean onlyTotal, int interval) {
-		Pair<ArrayList<String>, ArrayList<String>> resultPair = Pair.of(new ArrayList<String>(), new ArrayList<String>());
-		// 设置为true，只取单个报告（也就是总的报告）；否则，取所有的报告（多个子报告文件）
-		List<File> reportDataFiles = onlyTotal ? Lists.newArrayList(getReportDataFile(testId, key)) : getReportDataFiles(testId, key);
-		for (File file : reportDataFiles) {
-			String buildReportName = buildReportName(key, file);
-			if (key.equals(buildReportName)) {
-				buildReportName = "Total";
-			} else {
-				buildReportName = buildReportName.replace("_", " ");
-			}
-			// resultPair的第一个元素，类型是一个列表，每个元素都是String
-			resultPair.getFirst().add(buildReportName);
-			// resultPair的第二个元素，类型是一个列表，每个元素都是String（json格式的String），与第一个元素对应
-			resultPair.getSecond().add(getFileDataAsJson(file, interval));
-		}
-		return resultPair;
-	}
-
-	/**
-	 * 构建报告名称，文件存储在{NGRINDER_HOME}/perftest/{test_id}/report目录下，报告名TPS.data、Peak_TPS.data、Tests.data等
-	 * {@link PerfTestService#getReportData(long, java.lang.String, boolean, int)}
-	 *
-	 * @param key
-	 * @param file
-	 * @return
-	 */
-	public String buildReportName(String key, File file) {
-		// 移除后缀名：foo.txt-->foo；a/b/c.jpg-->a/b/c；a/b/c-->a/b/c；a.b/c-->a.b/c
-		String reportName = FilenameUtils.removeExtension(file.getName());
-		if (key.equals(reportName)) {
-			return reportName;
-		}
-		int splitCount = 2;
-		// 以中划线-为分割符分割字符串，至多分成2份。 比如：StringUtils.split("ab-cd-ef", "-", 2) = ["ab", "cd-ef"]
-		String[] baseName = StringUtils.split(reportName, "-", splitCount);
-		// 如果reportName可以分成2份，且第一份包含在INTERESTING_PER_TEST_STATISTICS中，则reportName等于第二份;
-		if (baseName.length == splitCount) {
-			if (SingleConsole.INTERESTING_PER_TEST_STATISTICS.contains(baseName[0])) {
-				reportName = baseName[1];
-			}
-		}
-		return reportName;
-	}
-
-	/**
-	 * 准备分发的文件，文件存储在{NGRINDER_HOME}/perftest/{test_id}/dist目录下
-	 * {@link PerfTestRunnable#doTest(org.ngrinder.model.PerfTest)}
-	 *
-	 * @param perfTest perfTest
-	 * @return File location in which the perftest script and resources are distributed.
-	 */
-	public ScriptHandler prepareDistribution(PerfTest perfTest) {
-		User user = perfTest.getCreatedUser();
-		// 从SVN服务器上获取scriptEntry
-		String scriptName = checkNotEmpty(perfTest.getScriptName(), "perfTest should have script name");
-		Long scriptRevision = getSafe(perfTest.getScriptRevision());
-		FileEntry tmpScriptEntry = fileEntryService.getOne(user, scriptName, scriptRevision);
-		FileEntry scriptEntry = checkNotNull(tmpScriptEntry, "script should exist");
-		// 获取分发目录，{NGRINDER_HOME}/perftest/x_xxx/{test_id}/dist，示例：/Users/ziling/.ngrinder/perftest/0_999/180/dist
-		File perfTestDistDirectory = getDistributionPath(perfTest);
-		//
-		ProcessingResultPrintStream processingResult = new ProcessingResultPrintStream(new ByteArrayOutputStream());
-		// 获取脚本目录下的所有文件
-		ScriptHandler handler = scriptHandlerFactory.getHandler(scriptEntry);
-		// 拷贝SVN上脚本相关文件（整个脚本工程）到{NGRINDER_HOME}/perftest/x_xxx/testId/dist目录
-		handler.prepareDist(perfTest.getId(), user, scriptEntry, perfTestDistDirectory, config.getControllerProperties(), processingResult);
-		LOGGER.info("File write is completed in {}", perfTestDistDirectory);
-		// 分发文件不成功则记录日志文件
-		if (!processingResult.isSuccess()) {
-			File logDir = new File(getLogFileDirectory(perfTest), "distribution_log.txt");
-			try {
-				FileUtils.writeByteArrayToFile(logDir, processingResult.getLogByteArray());
-			} catch (IOException e) {
-				noOp();
-			}
-			throw processException("Error while file distribution is prepared.");
-		}
-		return handler;
-	}
-
-	/**
 	 * 获取配置中允许的最大同时运行测试个数，key=controller.max_concurrent_test
 	 * {@link PerfTestService#canExecuteTestMore()}
 	 * {@link PerfTestRunnable#canExecuteMore( }
@@ -1838,6 +1837,7 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	 */
 	@SuppressWarnings("UnusedDeclaration")
 	public boolean canExecuteTestMore() {
+		// StatusCategory为PROGRESSING或TESTING的个数 是否小于 系统配置controller.max_concurrent_test 的值
 		return count(null, Status.getProcessingOrTestingTestStatus()) < getMaximumConcurrentTestCount();
 	}
 
@@ -1866,15 +1866,6 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	}
 
 	/**
-	 * 获取PerfTestRepository
-	 * {@link org.ngrinder.perftest.service.ClusteredPerfTestService#getNextRunnablePerfTestCandidate()}
-	 * @return
-	 */
-	public PerfTestRepository getPerfTestRepository() {
-		return perfTestRepository;
-	}
-
-	/**
 	 * 获取配置，Config是PerfTestService的一个成员变量，可以get、set
 	 * {@link org.ngrinder.perftest.service.ClusteredPerfTestService#getNextRunnablePerfTestCandidate()}
 	 * @return
@@ -1890,6 +1881,15 @@ public class PerfTestService extends AbstractPerfTestService implements Controll
 	 */
 	public void setConfig(Config config) {
 		this.config = config;
+	}
+
+	/**
+	 * 获取PerfTestRepository
+	 * {@link org.ngrinder.perftest.service.ClusteredPerfTestService#getNextRunnablePerfTestCandidate()}
+	 * @return
+	 */
+	public PerfTestRepository getPerfTestRepository() {
+		return perfTestRepository;
 	}
 }
 
